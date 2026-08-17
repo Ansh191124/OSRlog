@@ -1,0 +1,99 @@
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Oswald", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --color-asphalt: #14181F;
+  --color-asphalt-2: #1C222C;
+  --color-asphalt-3: #262E3B;
+  --color-paper: #F1F2ED;
+  --color-paper-2: #E8E9E2;
+  --color-ink: #1B1F27;
+  --color-steel: #5B6472;
+  --color-steel-light: #8C93A1;
+  --color-accent: #FF6A13;
+  --color-accent-deep: #C9500A;
+  --color-accent-soft: #FFE4CF;
+  --color-positive: #1F7A5C;
+  --color-positive-soft: #DCEFE7;
+  --color-negative: #C33F3F;
+  --color-negative-soft: #FBE1E1;
+  --color-line: #D9DBD3;
+}
+
+@layer base {
+  html, body, #root {
+    height: 100%;
+  }
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+    letter-spacing: 0.01em;
+  }
+  .tabular {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  ::selection {
+    background: var(--color-accent-soft);
+  }
+  *:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .card {
+    background: #fff;
+    border: 1px solid var(--color-line);
+    border-radius: 4px;
+  }
+  .route-dashes {
+    background-image: repeating-linear-gradient(to bottom, var(--color-steel-light) 0 6px, transparent 6px 14px);
+    width: 2px;
+  }
+  .btn-accent {
+    background: var(--color-accent);
+    color: #fff;
+    font-weight: 600;
+    transition: background-color .15s ease;
+  }
+  .btn-accent:hover { background: var(--color-accent-deep); }
+
+  .input-field {
+    background: #fff;
+    border: 1px solid var(--color-line);
+    border-radius: 3px;
+    padding: 0.55rem 0.7rem;
+    font-size: 0.875rem;
+    color: var(--color-ink);
+    width: 100%;
+  }
+  .input-field:focus {
+    border-color: var(--color-accent);
+    outline: none;
+    box-shadow: 0 0 0 3px var(--color-accent-soft);
+  }
+  .label-field {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-steel);
+    margin-bottom: 0.3rem;
+    display: block;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

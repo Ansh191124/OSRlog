@@ -1,0 +1,144 @@
+import { useEffect, useState } from 'react'
+import { DashboardAPI } from '../lib/api'
+import { StatCard, LoadState, ErrorState, PageHeader, Badge } from '../components/ui'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line } from 'recharts'
+
+const PERIODS = ['daily', 'weekly', 'monthly', 'yearly']
+
+export default function Dashboard() {
+  const [period, setPeriod] = useState('monthly')
+  const [overview, setOverview] = useState(null)
+  const [trend, setTrend] = useState([])
+  const [vehiclePerf, setVehiclePerf] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      setError(null)
+      try {
+        const [ov, tr, vp] = await Promise.all([
+          DashboardAPI.overview(),
+          DashboardAPI.trend({ period }),
+          DashboardAPI.vehiclePerformance({}),
+        ])
+        if (cancelled) return
+        setOverview(ov.data?.data || ov.data)
+        setTrend(tr.data?.data || tr.data || [])
+        setVehiclePerf(vp.data?.data || vp.data || [])
+      } catch (err) {
+        if (!cancelled) setError(err?.response?.data?.message || 'Could not reach the API. Confirm the backend is running and VITE_API_BASE_URL is set correctly.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [period])
+
+  return (
+    <div>
+      <PageHeader
+        eyebrow="Dispatch board"
+        title="Overview"
+        description="Freight, expense and profit rolled up from every trip sheet logged by drivers and dispatch."
+        action={
+          <div className="flex gap-1 bg-white border border-line rounded p-1">
+            {PERIODS.map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`px-3 py-1.5 text-xs font-semibold uppercase tracking-wide rounded transition-colors
+                  ${period === p ? 'bg-accent text-white' : 'text-steel hover:text-ink'}`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        }
+      />
+
+      {loading && <LoadState label="Pulling today's numbers" />}
+      {!loading && error && <ErrorState message={error} />}
+
+      {!loading && !error && (
+        <div className="space-y-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <StatCard label="Today's Freight" value={fmt(overview?.today?.freight ?? overview?.todayFreight)} />
+            <StatCard label="Today's P/L" value={fmt(overview?.today?.profitLoss ?? overview?.todayProfitLoss)} tone={pl(overview?.today?.profitLoss ?? overview?.todayProfitLoss)} />
+            <StatCard label="All-time Profit/Loss" value={fmt(overview?.allTime?.profitLoss ?? overview?.totalProfitLoss)} tone={pl(overview?.allTime?.profitLoss ?? overview?.totalProfitLoss)} />
+            <StatCard label="Active Vehicles" value={overview?.vehicleCounts?.active ?? overview?.activeVehicles ?? '—'} />
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-4">
+            <StatCard label="Cash Book" value={fmt(overview?.cashOnline?.cash ?? overview?.cashTotal)} sub="Received − paid, cash" />
+            <StatCard label="Online Book" value={fmt(overview?.cashOnline?.online ?? overview?.onlineTotal)} sub="Received − paid, online" />
+            <StatCard label="Maintenance Pending" value={overview?.maintenanceCounts?.pending ?? overview?.pendingMaintenance ?? '—'} sub="Needs scheduling" />
+          </div>
+
+          <div className="card p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-display text-lg">Profit / loss trend</h2>
+              <Badge tone="accent">{period}</Badge>
+            </div>
+            {trend?.length ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={normalizeTrend(trend)}>
+                  <CartesianGrid stroke="#D9DBD3" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#5B6472' }} axisLine={{ stroke: '#D9DBD3' }} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#5B6472' }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ borderRadius: 4, border: '1px solid #D9DBD3', fontSize: 12 }} />
+                  <Line type="monotone" dataKey="freight" stroke="#5B6472" strokeWidth={2} dot={false} name="Freight" />
+                  <Line type="monotone" dataKey="profitLoss" stroke="#FF6A13" strokeWidth={2.5} dot={false} name="P/L" />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-sm text-steel py-10 text-center">No trip data logged for this period yet.</p>
+            )}
+          </div>
+
+          <div className="card p-5">
+            <h2 className="font-display text-lg mb-4">Vehicle performance</h2>
+            {vehiclePerf?.length ? (
+              <ResponsiveContainer width="100%" height={Math.max(220, vehiclePerf.length * 44)}>
+                <BarChart data={normalizeVehiclePerf(vehiclePerf)} layout="vertical" margin={{ left: 24 }}>
+                  <CartesianGrid stroke="#D9DBD3" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 11, fill: '#5B6472' }} axisLine={{ stroke: '#D9DBD3' }} tickLine={false} />
+                  <YAxis type="category" dataKey="label" width={110} tick={{ fontSize: 11, fill: '#1B1F27' }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ borderRadius: 4, border: '1px solid #D9DBD3', fontSize: 12 }} />
+                  <Bar dataKey="profitLoss" fill="#FF6A13" radius={[0, 3, 3, 0]} name="Profit / loss" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-sm text-steel py-10 text-center">No vehicle performance data yet — log a few trips first.</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function fmt(v) {
+  if (v === undefined || v === null) return '—'
+  return Number(v).toLocaleString('en-IN', { maximumFractionDigits: 0 })
+}
+function pl(v) {
+  if (v === undefined || v === null) return 'default'
+  return Number(v) < 0 ? 'negative' : 'positive'
+}
+function normalizeTrend(trend) {
+  return trend.map((t) => ({
+    label: t.period || t.label || t._id || t.date,
+    freight: t.freightTotal ?? t.freight ?? 0,
+    profitLoss: t.profitLoss ?? t.pl ?? 0,
+  }))
+}
+function normalizeVehiclePerf(vp) {
+  return vp.map((v) => ({
+    label: v.vehicleNo || v.vehicleNoText || v.label || 'Vehicle',
+    profitLoss: v.profitLoss ?? v.pl ?? 0,
+  }))
+}

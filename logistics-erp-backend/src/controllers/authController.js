@@ -1,0 +1,83 @@
+const asyncHandler = require("express-async-handler");
+const jwt = require("jsonwebtoken");
+const { User } = require("../models");
+
+const signToken = (id) =>
+  jwt.sign({ id }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+  });
+
+// @route  POST /api/auth/register
+// @desc   Create a new employee/admin account (admin only)
+const register = asyncHandler(async (req, res) => {
+  const { name, email, password, role, phone } = req.body;
+
+  if (!name || !email || !password) {
+    res.status(400);
+    throw new Error("name, email and password are required");
+  }
+
+  const existing = await User.findOne({ email: email.toLowerCase() });
+  if (existing) {
+    res.status(400);
+    throw new Error("A user with this email already exists");
+  }
+
+  const user = await User.create({
+    name,
+    email,
+    password,
+    phone,
+    role: role === "admin" ? "admin" : "employee",
+  });
+
+  res.status(201).json({
+    success: true,
+    data: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      token: signToken(user._id),
+    },
+  });
+});
+
+// @route  POST /api/auth/login
+const login = asyncHandler(async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    res.status(400);
+    throw new Error("email and password are required");
+  }
+
+  const user = await User.findOne({ email: email.toLowerCase() });
+  if (!user || !(await user.comparePassword(password))) {
+    res.status(401);
+    throw new Error("Invalid email or password");
+  }
+
+  if (user.status !== "active") {
+    res.status(403);
+    throw new Error("Account is inactive, contact admin");
+  }
+
+  res.json({
+    success: true,
+    data: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      token: signToken(user._id),
+    },
+  });
+});
+
+// @route  GET /api/auth/me
+const me = asyncHandler(async (req, res) => {
+  res.json({ success: true, data: req.user });
+});
+
+module.exports = { register, login, me };
