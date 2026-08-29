@@ -32,3 +32,10 @@ jobs:
         run: |
           docker push osrlogistics/osrbackend:${{ github.sha }}
           docker push osrlogistics/osrbackend:latest
+
+      # Render does not automatically restart a service merely because the Docker Hub
+      # `latest` tag changes. Configure its Deploy Hook URL as a repository secret so
+      # the API serving the Netlify frontend is refreshed after every image build.
+      - name: Deploy latest backend image to Render
+        if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}
+        run: curl --fail --silent --show-error --request POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"

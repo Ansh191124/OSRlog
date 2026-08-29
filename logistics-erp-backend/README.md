@@ -350,7 +350,20 @@ Any of these work with zero code changes:
   it behind an Nginx reverse proxy with HTTPS (Let's Encrypt / ACM)
 - **ECS / Fargate** — use the included `Dockerfile`, push to **ECR**, run as a Fargate service
 
-### 6.4 Environment variables in AWS
+### 6.4 Render deployment with the included GitHub Action
+
+The frontend is configured to call the Render API URL. The GitHub Action builds and pushes
+`osrlogistics/osrbackend:latest` on every push to `main`; Render must then be told to deploy
+that new image. In Render, copy the service's **Deploy Hook** URL and add it to the GitHub
+repository as the `RENDER_DEPLOY_HOOK_URL` Actions secret. The workflow will then trigger a
+Render redeploy after each Docker image push.
+
+If the frontend displays `Route not found - GET /api/inventory`, `/api/fleets`, or
+`/api/approvals`, use **Manual Deploy → Deploy latest image** once in the Render service.
+Those routes are present in this backend; the message means Render is still serving an older
+container image.
+
+### 6.5 Environment variables in AWS
 Store `.env` values as **Elastic Beanstalk environment properties**, **ECS task
 definition environment variables**, or **AWS Secrets Manager** — never commit `.env`
 to source control (it's already in `.gitignore`).
