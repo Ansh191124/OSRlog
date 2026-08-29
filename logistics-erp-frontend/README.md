@@ -2,7 +2,8 @@
 
 A React + Vite + Tailwind frontend built against the Logistics ERP backend API
 (Node/Express/MongoDB), covering every module: Auth, Dashboard, Trip Sheets (with
-leg entries, expense box, summary box), Drivers, Vehicles, Maintenance and Payments.
+leg entries, expense box, summary box), Drivers, Vehicles, Maintenance, Inventory,
+Approvals, Client Fleets and Payments.
 
 ## 1. Setup
 
@@ -39,16 +40,19 @@ point `VITE_API_BASE_URL` at your deployed API.
 | **Drivers** | List, search, create/edit modal, delete (admin only) |
 | **Vehicles** | List, search, create/edit modal, delete (admin only), expiring-documents banner (RC/insurance/permit/fitness/PUC) |
 | **Maintenance** | Status board (pending/upcoming/ongoing/completed) sourced from `/maintenance/alerts`, filterable list, create/edit modal |
+| **Inventory** | Request stock purchases and see whether each item is pending approval or available for maintenance use |
+| **Approvals** | Submit driver, maintenance or inventory payment requests; Admin/Co-admin approves/rejects and Accountant marks approved items paid |
+| **Client Fleets** | Client fleet list with responsible-person and vehicle assignment controls for Admin/Co-admin |
 | **Payments** | Cash vs online summary cards, type filter, list, log-payment modal |
 | **User access** | Admin-only staff-user creation and least-privilege roles |
 
 Role-based UI: delete actions and user creation are gated to `role === 'admin'`,
 matching the backend's `authorize(...)` middleware.
 
-The scoped staff roles are: `employee` (create/edit drivers and vehicles),
-`entry_employee` (create and manage trip sheets), and `accountant` (manage the
-cashbook). The UI hides all unrelated navigation and blocks the corresponding
-routes; the API must enforce the same permissions.
+The scoped staff roles are: `employee` (drivers, vehicles, maintenance, inventory,
+approvals and fleet visibility), `entry_employee` (trip sheets), `co_admin`
+(operations, approvals and fleet assignments), and `accountant` (cashbook and payment
+completion). The UI hides unrelated navigation and the API enforces the same permissions.
 
 ## 4. Backend additions required
 
@@ -79,10 +83,14 @@ src/
 ├── pages/
 │   ├── Login.jsx
 │   ├── Users.jsx
+│   ├── Roles.jsx
 │   ├── Dashboard.jsx
 │   ├── Drivers.jsx
 │   ├── Vehicles.jsx
 │   ├── Maintenance.jsx
+│   ├── Inventory.jsx
+│   ├── Approvals.jsx
+│   ├── Fleets.jsx
 │   ├── Payments.jsx
 │   └── trips/
 │       ├── TripsList.jsx

@@ -15,12 +15,15 @@ with just an `.env` change.
 
 | Module | What it does |
 |---|---|
-| **Auth** | JWT login, admin/employee roles |
+| **Auth & access** | JWT login, configurable module permissions, Admin, Co-admin, Employee, Entry employee and Accountant roles |
 | **Trip Management** | Full digital version of your paper trip sheet: header, multiple leg entries, expense box, summary box |
 | **Drivers** | Driver master with license, docs, photo, salary info |
 | **Vehicles** | Vehicle master with RC/insurance/permit/fitness/PUC expiry tracking |
-| **Maintenance** | Pending / upcoming / ongoing / completed servicing, with due-date & odometer alerts |
-| **Payments** | Cash & online payment book, linked to trips/vehicles/drivers, with summary totals |
+| **Maintenance** | Pending / upcoming / ongoing / completed servicing, due-date & odometer alerts, and an approval request for the service cost |
+| **Inventory** | Stock purchase requests, approval and accountant-payment gate before stock becomes available; stock can be consumed by maintenance |
+| **Approvals** | Single request → approve/reject → paid queue for driver advances, maintenance and inventory purchases |
+| **Client Fleets** | Client fleet register with responsible person and vehicle assignments |
+| **Payments** | Cash & online payment book, linked to trips/vehicles/drivers, with summary totals and payments created from approved requests |
 | **Dashboard** | Profit/loss aggregation by day/week/month/year, vehicle-wise performance, today's snapshot |
 | **File uploads** | Driver photos, license docs, vehicle RC/insurance docs, maintenance invoices, payment receipts — stored locally by default, or on AWS S3 with one env variable |
 
@@ -44,7 +47,10 @@ logistics-erp-backend/
 │   │   ├── Vehicle.js
 │   │   ├── Trip.js             # Trip + embedded entries[], expense{}, summary{}
 │   │   ├── Maintenance.js
-│   │   └── Payment.js
+│   │   ├── Payment.js
+│   │   ├── ApprovalRequest.js
+│   │   ├── InventoryItem.js
+│   │   └── Fleet.js
 │   ├── controllers/           # Business logic for every module
 │   ├── routes/                 # Express routers, one per module
 │   ├── middlewares/
@@ -134,10 +140,10 @@ trips, drivers, vehicles, maintenance, and payments as documents while you test 
 1. `POST /api/auth/login` with `{ email, password }` → returns a JWT `token`.
 2. Send that token on every other request:
    `Authorization: Bearer <token>`
-3. Only an **admin** can create new users (`POST /api/auth/register`) and delete
-   drivers/vehicles/trips/maintenance/payments. Employees can create and view everything
-   else (trips, drivers, vehicles, maintenance, payments) — adjust the `authorize(...)`
-   calls in the route files if you want different permission rules.
+3. Module access is enforced by the role's permissions. Admin has all modules; Co-admin
+   can approve requests and assign fleets; Accountant marks approved requests as paid;
+   Employees can submit maintenance, inventory and driver-payment requests. Admin manages
+   users and roles.
 
 ---
 
@@ -161,8 +167,24 @@ Every `:id` in these routes is a MongoDB ObjectId (24-character hex string).
 | PUT | `/api/roles/:key` | Edit a role category's module permissions (admin only) |
 | GET | `/api/status` | Public server status / health check |
 | GET | `/api/inventory` | List stock items (requires Inventory access) |
-| POST | `/api/inventory` | Add stock and automatically log its purchase to Cashbook |
-| POST | `/api/inventory/use` | Use stock against a maintenance record |
+| POST | `/api/inventory` | Create a stock-purchase request; stock becomes available after approval and payment |
+
+### Approval requests
+| Method | Route | Description |
+|---|---|---|
+| GET | `/api/approvals?status=&requestType=` | List driver, maintenance and inventory approval requests |
+| POST | `/api/approvals` | Submit a driver payment, maintenance or inventory request |
+| PUT | `/api/approvals/:id/approve` | Approve a requested item (Admin/Co-admin) |
+| PUT | `/api/approvals/:id/reject` | Reject a requested item (Admin/Co-admin) |
+| PUT | `/api/approvals/:id/pay` | Mark an approved request paid and create its Cashbook payment (Admin/Accountant) |
+
+### Client fleets
+| Method | Route | Description |
+|---|---|---|
+| GET | `/api/fleets` | List fleets, people and assigned vehicles |
+| POST | `/api/fleets` | Create a client fleet |
+| PUT | `/api/fleets/:id` | Update fleet details (Admin/Co-admin) |
+| PUT | `/api/fleets/:id/assign` | Assign responsible person and vehicle IDs (Admin/Co-admin) |
 
 ### Drivers
 | Method | Route | Description |
@@ -251,7 +273,7 @@ alongside, the free-text fields: pass `"vehicleId": "<vehicle _id>"` and/or
 | GET | `/api/maintenance?status=&vehicleId=&priority=` | List maintenance records |
 | GET | `/api/maintenance/alerts?days=15` | Grouped pending/upcoming/ongoing + due-soon list |
 | GET | `/api/maintenance/:id` | Detail |
-| POST | `/api/maintenance` | Create record |
+| POST | `/api/maintenance` | Create record and its maintenance-cost approval request |
 | PUT | `/api/maintenance/:id` | Update record |
 | DELETE | `/api/maintenance/:id` | Delete (admin) |
 | POST | `/api/maintenance/:id/invoice` | Upload service invoice |
@@ -357,6 +379,13 @@ to source control (it's already in `.gitignore`).
 - **Drivers / Vehicles** sections → standard CRUD against `/api/drivers` and `/api/vehicles`.
 - **Maintenance** section → `/api/maintenance/alerts` gives you the pending/upcoming/ongoing
   buckets directly, ready to render as three columns or tabs.
+- **Approval queue** → send a request to `/api/approvals`, then the Admin/Co-admin approves
+  it and the Accountant calls `/api/approvals/:id/pay`; that payment is automatically visible
+  in the Cashbook.
+- **Inventory** → `POST /api/inventory` creates a pending purchase record. It is only usable
+  by maintenance after the linked approval request has been marked paid.
+- **Client fleets** → create with `/api/fleets`, then assign a person and `vehicleIds` through
+  `/api/fleets/:id/assign`.
 - **Payment Book** section → `/api/payments` list + `/api/payments/summary` for the
   cash-vs-online totals at the top of the page.
 
