@@ -6,9 +6,9 @@ const {
   getOverview,
   getVehiclePerformance,
 } = require("../controllers/dashboardController");
-const { protect } = require("../middlewares/auth");
+const { protect, requirePermission } = require("../middlewares/auth");
 
-router.use(protect);
+router.use(protect, requirePermission("dashboard"));
 
 router.get("/summary", getSummary);
 router.get("/trend", getTrend);

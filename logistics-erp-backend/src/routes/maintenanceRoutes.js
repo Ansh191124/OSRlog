@@ -9,10 +9,10 @@ const {
   getAlerts,
   uploadInvoice,
 } = require("../controllers/maintenanceController");
-const { protect, authorize } = require("../middlewares/auth");
+const { protect, authorize, requirePermission } = require("../middlewares/auth");
 const { upload, setUploadFolder } = require("../middlewares/upload");
 
-router.use(protect);
+router.use(protect, requirePermission("maintenance"));
 
 router.get("/", getMaintenances);
 router.get("/alerts", getAlerts);

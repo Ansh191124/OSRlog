@@ -1,13 +1,33 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { Loader2, Truck } from 'lucide-react'
+import { Circle, Loader2, Truck } from 'lucide-react'
+import { ServerStatusAPI } from '../lib/api'
 
 export default function Login() {
   const { login, loading, error } = useAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('admin@logistics.com')
   const [password, setPassword] = useState('')
+  const [serverStatus, setServerStatus] = useState('checking')
+
+  useEffect(() => {
+    let active = true
+    const checkServer = async () => {
+      try {
+        const response = await ServerStatusAPI.status()
+        const data = response?.data?.data ?? response?.data ?? {}
+        const status = String(data.status ?? data.health ?? data.state ?? '').toLowerCase()
+        const online = data.success === true || !status || ['ok', 'healthy', 'up', 'running', 'online', 'success'].includes(status)
+        if (active) setServerStatus(online ? 'online' : 'offline')
+      } catch {
+        if (active) setServerStatus('offline')
+      }
+    }
+    checkServer()
+    const timer = window.setInterval(checkServer, 30000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [])
 
   const onSubmit = async (e) => {
     e.preventDefault()
@@ -74,6 +94,11 @@ export default function Login() {
             Default seeded admin: admin@logistics.com / Admin@123
           </p>
         </form>
+      </div>
+
+      <div className="fixed right-4 bottom-4 flex items-center gap-2 rounded-full border border-white/15 bg-asphalt-3/95 px-3 py-2 text-xs font-medium text-white shadow-lg" aria-live="polite">
+        <Circle className={`w-2.5 h-2.5 fill-current ${serverStatus === 'online' ? 'text-positive' : serverStatus === 'offline' ? 'text-negative' : 'text-accent animate-pulse'}`} />
+        <span>Server {serverStatus === 'online' ? 'online' : serverStatus === 'offline' ? 'offline' : 'checking…'}</span>
       </div>
     </div>
   )

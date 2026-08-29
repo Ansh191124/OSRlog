@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Route, Users, Truck, Wrench, Wallet, UserCog, LogOut, Menu, X } from 'lucide-react'
+import { LayoutDashboard, Route, Users, Truck, Wrench, Wallet, UserCog, Package, ClipboardCheck, Building2, LogOut, Menu, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useState } from 'react'
 import { canAccess } from '../lib/roles'
@@ -7,10 +7,14 @@ import { canAccess } from '../lib/roles'
 const NAV = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true, area: 'dashboard' },
   { to: '/users', label: 'User access', icon: UserCog, area: 'users' },
+  { to: '/roles', label: 'Roles & access', icon: UserCog, area: 'users' },
   { to: '/trips', label: 'Trip Sheets', icon: Route, area: 'trips' },
   { to: '/drivers', label: 'Drivers', icon: Users, area: 'drivers' },
   { to: '/vehicles', label: 'Vehicles', icon: Truck, area: 'vehicles' },
   { to: '/maintenance', label: 'Maintenance', icon: Wrench, area: 'maintenance' },
+  { to: '/inventory', label: 'Inventory', icon: Package, area: 'inventory' },
+  { to: '/approvals', label: 'Approvals', icon: ClipboardCheck, area: 'approvals' },
+  { to: '/fleets', label: 'Client fleets', icon: Building2, area: 'fleets' },
   { to: '/payments', label: 'Cashbook', icon: Wallet, area: 'payments' },
 ]
 

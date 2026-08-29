@@ -1,5 +1,5 @@
 const asyncHandler = require("express-async-handler");
-const { Maintenance } = require("../models");
+const { Maintenance, InventoryItem, InventoryUsage, ApprovalRequest } = require("../models");
 const { getFileUrl } = require("../middlewares/upload");
 const { getPagination, paginationMeta } = require("../utils/api");
 
@@ -37,20 +37,71 @@ const getMaintenance = asyncHandler(async (req, res) => {
 });
 
 const createMaintenance = asyncHandler(async (req, res) => {
-  const { vehicleId, ...body } = req.body;
+  const { vehicleId, inventoryUses = [], serviceType, dueDate, odometerDue, notes, ...body } = req.body;
+  if (!Array.isArray(inventoryUses)) {
+    res.status(400);
+    throw new Error("inventoryUses must be a list of inventory items");
+  }
+  for (const use of inventoryUses) {
+    if (!use.itemId || Number(use.quantity) <= 0) {
+      res.status(400);
+      throw new Error("Each inventory item needs an item and a positive quantity");
+    }
+    const item = await InventoryItem.findById(use.itemId);
+    if (!item || item.quantity < Number(use.quantity)) {
+      res.status(400);
+      throw new Error("An inventory item is unavailable or has insufficient stock");
+    }
+  }
   const record = await Maintenance.create({
     ...body,
     vehicle: vehicleId || body.vehicle || undefined,
+    maintenanceType: serviceType || body.maintenanceType,
+    scheduledDate: dueDate || body.scheduledDate,
+    nextDueOdometer: odometerDue || body.nextDueOdometer,
+    remark: notes || body.remark,
     createdBy: req.user._id,
   });
-  res.status(201).json({ success: true, data: record });
+  let inventoryCost = 0;
+  for (const use of inventoryUses) {
+    const quantity = Number(use.quantity);
+    const item = await InventoryItem.findOneAndUpdate(
+      { _id: use.itemId, quantity: { $gte: quantity } },
+      { $inc: { quantity: -quantity } },
+      { new: true }
+    );
+    if (!item) {
+      res.status(400);
+      throw new Error("Inventory changed while saving; please try again");
+    }
+    inventoryCost += quantity * item.unitCost;
+    await InventoryUsage.create({ item: item._id, maintenance: record._id, quantity, unitCost: item.unitCost, notes: use.notes, createdBy: req.user._id });
+  }
+  if (inventoryCost) {
+    record.inventoryCost = inventoryCost;
+    await record.save();
+  }
+  const request = await ApprovalRequest.create({
+    requestType: "maintenance", title: `Maintenance: ${record.maintenanceType || "service"}`,
+    amount: Number(record.cost || 0) + inventoryCost, paymentType: req.body.paymentType || "cash", paymentMode: req.body.paymentMode || "cash",
+    vehicle: record.vehicle, maintenance: record._id, details: record.description || record.remark, requestedBy: req.user._id,
+  });
+  res.status(201).json({ success: true, data: record, request });
 });
 
 const updateMaintenance = asyncHandler(async (req, res) => {
-  const { vehicleId, ...body } = req.body;
+  const { vehicleId, serviceType, dueDate, odometerDue, notes, inventoryUses, ...body } = req.body;
+  if (inventoryUses !== undefined) {
+    res.status(400);
+    throw new Error("Inventory usage can only be recorded when creating a maintenance record");
+  }
   const record = await Maintenance.findByIdAndUpdate(req.params.id, {
     ...body,
     ...(vehicleId !== undefined ? { vehicle: vehicleId || null } : {}),
+    ...(serviceType !== undefined ? { maintenanceType: serviceType } : {}),
+    ...(dueDate !== undefined ? { scheduledDate: dueDate || null } : {}),
+    ...(odometerDue !== undefined ? { nextDueOdometer: odometerDue || null } : {}),
+    ...(notes !== undefined ? { remark: notes } : {}),
   }, {
     new: true,
     runValidators: true,

@@ -97,6 +97,9 @@ docker compose exec api npm run seed
 The API is now live at **http://localhost:5000**.
 Health check: http://localhost:5000/health
 
+Server status (useful for confirming a Render free-tier instance has finished waking):
+http://localhost:5000/api/status
+
 Default admin login (created by the seed script, change these in `.env` before seeding
 in a real deployment):
 ```
@@ -150,6 +153,16 @@ Every `:id` in these routes is a MongoDB ObjectId (24-character hex string).
 | POST | `/api/auth/login` | Login, returns JWT |
 | POST | `/api/auth/register` | Create user (admin only) |
 | GET | `/api/auth/me` | Current logged-in user |
+| GET | `/api/users` | List users, newest first (admin only) |
+| POST | `/api/users` | Create a user and assign role category (admin only) |
+| PUT | `/api/users/:id` | Edit user information, role category, status, or password (admin only) |
+| GET | `/api/roles` | List role categories and their module access (admin only) |
+| POST | `/api/roles` | Create a role category with module permissions (admin only) |
+| PUT | `/api/roles/:key` | Edit a role category's module permissions (admin only) |
+| GET | `/api/status` | Public server status / health check |
+| GET | `/api/inventory` | List stock items (requires Inventory access) |
+| POST | `/api/inventory` | Add stock and automatically log its purchase to Cashbook |
+| POST | `/api/inventory/use` | Use stock against a maintenance record |
 
 ### Drivers
 | Method | Route | Description |

@@ -1,5 +1,12 @@
 const jwt = require("jsonwebtoken");
-const { User } = require("../models");
+const { User, Role } = require("../models");
+const { defaultRole } = require("../config/accessControl");
+
+const getPermissions = async (roleKey) => {
+  if (roleKey === "admin") return ["*"];
+  const role = await Role.findOne({ key: roleKey }).select("permissions");
+  return role ? role.permissions : (defaultRole(roleKey)?.permissions || []);
+};
 
 // Verifies JWT and attaches req.user
 const protect = async (req, res, next) => {
@@ -27,6 +34,7 @@ const protect = async (req, res, next) => {
     }
 
     req.user = user;
+    req.user.permissions = await getPermissions(user.role);
     next();
   } catch (err) {
     return res.status(401).json({ success: false, message: "Not authorized, invalid or expired token" });
@@ -46,4 +54,11 @@ const authorize = (...roles) => {
   };
 };
 
-module.exports = { protect, authorize };
+const requirePermission = (permission) => {
+  return (req, res, next) => {
+    if (req.user?.permissions?.includes("*") || req.user?.permissions?.includes(permission)) return next();
+    return res.status(403).json({ success: false, message: `Your role does not have ${permission} access` });
+  };
+};
+
+module.exports = { protect, authorize, requirePermission, getPermissions };

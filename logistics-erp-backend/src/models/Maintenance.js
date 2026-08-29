@@ -24,6 +24,7 @@ const maintenanceSchema = new Schema(
     nextDueOdometer: { type: Number },
 
     cost: { type: Number },
+    inventoryCost: { type: Number, default: 0 },
     vendor: { type: String },
     invoiceUrl: { type: String },
 

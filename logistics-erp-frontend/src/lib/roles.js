@@ -3,16 +3,19 @@ export const ROLES = {
   employee: 'Employee',
   entry_employee: 'Entry employee',
   accountant: 'Accountant',
+  co_admin: 'Co-admin',
 }
 
 export const ROLE_ACCESS = {
-  admin: ['dashboard', 'users', 'drivers', 'vehicles', 'trips', 'payments', 'maintenance'],
-  employee: ['drivers', 'vehicles'],
+  admin: ['dashboard', 'users', 'drivers', 'vehicles', 'trips', 'payments', 'maintenance', 'inventory', 'approvals', 'fleets'],
+  co_admin: ['dashboard', 'drivers', 'vehicles', 'trips', 'payments', 'maintenance', 'inventory', 'approvals', 'fleets'],
+  employee: ['drivers', 'vehicles', 'maintenance', 'inventory', 'approvals', 'fleets'],
   entry_employee: ['trips'],
-  accountant: ['payments'],
+  accountant: ['payments', 'approvals'],
 }
 
 export function canAccess(user, area) {
+  if (user?.permissions) return user.permissions.includes('*') || user.permissions.includes(area)
   return Boolean(user?.role && ROLE_ACCESS[user.role]?.includes(area))
 }
 

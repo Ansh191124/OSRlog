@@ -2,6 +2,7 @@ import axios from 'axios'
 import { cacheResponse, invalidateCache, readCached } from './requestCache'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
+const SERVER_ROOT_URL = BASE_URL.replace(/\/api\/?$/, '')
 
 export const api = axios.create({ baseURL: BASE_URL })
 
@@ -23,7 +24,7 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => {
     if (res.config.method?.toLowerCase() === 'get' && !res.config.skipCache) cacheResponse(res.config, res)
-    if (res.config.method?.toLowerCase() !== 'get') invalidateCache('/drivers', '/vehicles', '/trips', '/payments', '/dashboard', '/maintenance')
+    if (res.config.method?.toLowerCase() !== 'get') invalidateCache('/drivers', '/vehicles', '/trips', '/payments', '/dashboard', '/maintenance', '/inventory', '/approvals', '/fleets')
     return res
   },
   (err) => {
@@ -48,7 +49,30 @@ export const AuthAPI = {
 // Admin-only on the API. Kept separate from public sign-up semantics.
 export const UsersAPI = {
   list: (params) => api.get('/users', { params }),
-  create: (payload) => api.post('/auth/register', payload),
+  create: (payload) => api.post('/users', payload),
+  update: (id, payload) => api.put(`/users/${id}`, payload),
+}
+
+export const RolesAPI = {
+  list: () => api.get('/roles'),
+  create: (payload) => api.post('/roles', payload),
+  update: (key, payload) => api.put(`/roles/${key}`, payload),
+  remove: (key) => api.delete(`/roles/${key}`),
+}
+
+export const InventoryAPI = {
+  list: () => api.get('/inventory'),
+  add: (payload) => api.post('/inventory', payload),
+}
+
+export const ApprovalsAPI = {
+  list: (params) => api.get('/approvals', { params }), create: (payload) => api.post('/approvals', payload),
+  approve: (id) => api.put(`/approvals/${id}/approve`), reject: (id, reason) => api.put(`/approvals/${id}/reject`, { reason }), pay: (id, payload) => api.put(`/approvals/${id}/pay`, payload),
+}
+
+export const FleetsAPI = {
+  list: () => api.get('/fleets'), create: (payload) => api.post('/fleets', payload),
+  update: (id, payload) => api.put(`/fleets/${id}`, payload), assign: (id, payload) => api.put(`/fleets/${id}/assign`, payload),
 }
 
 // ---- Drivers ----
@@ -119,4 +143,10 @@ export const DashboardAPI = {
   trend: (params) => api.get('/dashboard/trend', { params }),
   overview: () => api.get('/dashboard/overview'),
   vehiclePerformance: (params) => api.get('/dashboard/vehicle-performance', { params }),
+}
+
+// ---- Server ----
+export const ServerStatusAPI = {
+  // The health endpoint is mounted on the Express app, outside its /api router.
+  status: () => axios.get(`${SERVER_ROOT_URL}/server-status`),
 }

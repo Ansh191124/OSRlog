@@ -15,6 +15,11 @@ const tripRoutes = require("./routes/tripRoutes");
 const maintenanceRoutes = require("./routes/maintenanceRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const userRoutes = require("./routes/userRoutes");
+const roleRoutes = require("./routes/roleRoutes");
+const inventoryRoutes = require("./routes/inventoryRoutes");
+const approvalRequestRoutes = require("./routes/approvalRequestRoutes");
+const fleetRoutes = require("./routes/fleetRoutes");
 
 const app = express();
 
@@ -37,14 +42,28 @@ if (process.env.NODE_ENV !== "test") {
 // Serve locally-uploaded files when STORAGE_DRIVER=local
 app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 
-// ---------- Health check ----------
-app.get("/health", (req, res) => {
-  res.json({ success: true, message: "Logistics ERP API is running", time: new Date().toISOString() });
-});
+// ---------- Server status / health checks ----------
+const serverStatus = (req, res) => {
+  res.json({
+    success: true,
+    status: "ok",
+    message: "Logistics ERP API is running",
+    time: new Date().toISOString(),
+    uptime: Math.floor(process.uptime()),
+  });
+};
+
+app.get("/health", serverStatus);
 
 // ---------- API routes ----------
 const API_PREFIX = process.env.API_PREFIX || "/api";
+app.get(`${API_PREFIX}/status`, serverStatus);
 app.use(`${API_PREFIX}/auth`, authRoutes);
+app.use(`${API_PREFIX}/users`, userRoutes);
+app.use(`${API_PREFIX}/roles`, roleRoutes);
+app.use(`${API_PREFIX}/inventory`, inventoryRoutes);
+app.use(`${API_PREFIX}/approvals`, approvalRequestRoutes);
+app.use(`${API_PREFIX}/fleets`, fleetRoutes);
 app.use(`${API_PREFIX}/drivers`, driverRoutes);
 app.use(`${API_PREFIX}/vehicles`, vehicleRoutes);
 app.use(`${API_PREFIX}/trips`, tripRoutes);

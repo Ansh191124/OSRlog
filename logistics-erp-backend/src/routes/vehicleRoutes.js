@@ -10,10 +10,10 @@ const {
   uploadVehiclePhoto,
   uploadVehicleDoc,
 } = require("../controllers/vehicleController");
-const { protect, authorize } = require("../middlewares/auth");
+const { protect, authorize, requirePermission } = require("../middlewares/auth");
 const { upload, setUploadFolder } = require("../middlewares/upload");
 
-router.use(protect);
+router.use(protect, requirePermission("vehicles"));
 
 router.get("/", getVehicles);
 router.get("/expiring-documents", getExpiringDocuments);

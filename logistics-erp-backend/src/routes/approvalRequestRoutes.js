@@ -1,0 +1,11 @@
+const express = require("express");
+const { getRequests, createRequest, approveRequest, rejectRequest, markPaid } = require("../controllers/approvalRequestController");
+const { protect, authorize, requirePermission } = require("../middlewares/auth");
+const router = express.Router();
+router.use(protect, requirePermission("approvals"));
+router.get("/", getRequests);
+router.post("/", createRequest);
+router.put("/:id/approve", authorize("admin", "co_admin"), approveRequest);
+router.put("/:id/reject", authorize("admin", "co_admin"), rejectRequest);
+router.put("/:id/pay", authorize("admin", "accountant"), markPaid);
+module.exports = router;

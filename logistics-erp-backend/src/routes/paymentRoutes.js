@@ -9,10 +9,10 @@ const {
   getPaymentSummary,
   uploadReceipt,
 } = require("../controllers/paymentController");
-const { protect, authorize } = require("../middlewares/auth");
+const { protect, authorize, requirePermission } = require("../middlewares/auth");
 const { upload, setUploadFolder } = require("../middlewares/upload");
 
-router.use(protect);
+router.use(protect, requirePermission("payments"));
 
 router.get("/", getPayments);
 router.get("/summary", getPaymentSummary);

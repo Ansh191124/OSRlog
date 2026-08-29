@@ -9,10 +9,10 @@ const {
   uploadDriverPhoto,
   uploadDriverLicenseDoc,
 } = require("../controllers/driverController");
-const { protect, authorize } = require("../middlewares/auth");
+const { protect, authorize, requirePermission } = require("../middlewares/auth");
 const { upload, setUploadFolder } = require("../middlewares/upload");
 
-router.use(protect); // all driver routes require login
+router.use(protect, requirePermission("drivers"));
 
 router.get("/", getDrivers);
 router.get("/:id", getDriver);

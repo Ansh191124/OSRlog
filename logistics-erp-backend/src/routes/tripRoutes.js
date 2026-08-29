@@ -13,9 +13,9 @@ const {
   upsertTripSummary,
   calculateTripSummary,
 } = require("../controllers/tripController");
-const { protect, authorize } = require("../middlewares/auth");
+const { protect, authorize, requirePermission } = require("../middlewares/auth");
 
-router.use(protect); // employees AND admins can create/manage trips
+router.use(protect, requirePermission("trips"));
 
 router.get("/", getTrips);
 router.get("/:id", getTrip);

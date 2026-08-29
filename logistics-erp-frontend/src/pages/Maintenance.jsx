@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
-import { MaintenanceAPI } from '../lib/api'
+import { InventoryAPI, MaintenanceAPI } from '../lib/api'
 import DataTable from '../components/DataTable'
 import { Modal, PageHeader, Badge, Field } from '../components/ui'
 import { Trash2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
-const EMPTY = { vehicleNoText: '', serviceType: '', priority: 'normal', status: 'pending', dueDate: '', odometerDue: '', notes: '' }
+const EMPTY = { vehicleNoText: '', serviceType: '', priority: 'medium', status: 'pending', dueDate: '', odometerDue: '', cost: '', notes: '', inventoryItemId: '', inventoryQuantity: '' }
 
 const STATUS_TONE = { pending: 'accent', upcoming: 'steel', ongoing: 'accent', completed: 'positive' }
 
@@ -21,6 +21,7 @@ export default function Maintenance() {
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
+  const [inventoryItems, setInventoryItems] = useState([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -32,6 +33,8 @@ export default function Maintenance() {
       ])
       setRows(res.data?.data || res.data || [])
       setAlerts(al.data?.data || al.data || null)
+      const inventory = await InventoryAPI.list().catch(() => ({ data: { data: [] } }))
+      setInventoryItems(inventory.data?.data || [])
     } catch (err) {
       setError(err?.response?.data?.message || 'Could not load maintenance records from the API.')
     } finally {
@@ -45,9 +48,9 @@ export default function Maintenance() {
   const openEdit = (row) => {
     setEditing(row)
     setForm({
-      vehicleNoText: row.vehicleNoText || row.vehicleId?.vehicleNo || '', serviceType: row.serviceType || '',
-      priority: row.priority || 'normal', status: row.status || 'pending',
-      dueDate: row.dueDate ? row.dueDate.slice(0, 10) : '', odometerDue: row.odometerDue ?? '', notes: row.notes || '',
+      vehicleNoText: row.vehicleNoText || row.vehicle?.vehicleNo || '', serviceType: row.maintenanceType || row.serviceType || '',
+      priority: row.priority || 'medium', status: row.status || 'pending',
+      dueDate: row.scheduledDate ? row.scheduledDate.slice(0, 10) : '', odometerDue: row.nextDueOdometer ?? '', cost: row.cost ?? '', notes: row.remark || '', inventoryItemId: '', inventoryQuantity: '',
     })
     setModalOpen(true)
   }
@@ -56,7 +59,13 @@ export default function Maintenance() {
     e.preventDefault()
     setSaving(true)
     try {
-      const payload = { ...form, odometerDue: form.odometerDue === '' ? undefined : Number(form.odometerDue) }
+      const { inventoryItemId, inventoryQuantity, ...details } = form
+      const payload = {
+        ...details,
+        odometerDue: form.odometerDue === '' ? undefined : Number(form.odometerDue),
+        cost: form.cost === '' ? 0 : Number(form.cost),
+        ...(inventoryItemId ? { inventoryUses: [{ itemId: inventoryItemId, quantity: Number(inventoryQuantity || 1) }] } : {}),
+      }
       if (editing) await MaintenanceAPI.update(editing._id, payload)
       else await MaintenanceAPI.create(payload)
       setModalOpen(false)
@@ -74,9 +83,10 @@ export default function Maintenance() {
   }
 
   const columns = [
-    { key: 'vehicleNoText', header: 'Vehicle', render: (r) => <span className="font-mono font-semibold tabular">{r.vehicleNoText || r.vehicleId?.vehicleNo || '—'}</span> },
-    { key: 'serviceType', header: 'Service' },
-    { key: 'dueDate', header: 'Due', render: (r) => r.dueDate ? r.dueDate.slice(0, 10) : '—' },
+    { key: 'vehicleNoText', header: 'Vehicle', render: (r) => <span className="font-mono font-semibold tabular">{r.vehicleNoText || r.vehicle?.vehicleNo || '—'}</span> },
+    { key: 'maintenanceType', header: 'Service' },
+    { key: 'inventoryCost', header: 'Stock used', render: (r) => r.inventoryCost ? `₹${Number(r.inventoryCost).toLocaleString('en-IN')}` : '-' },
+    { key: 'scheduledDate', header: 'Due', render: (r) => r.scheduledDate ? r.scheduledDate.slice(0, 10) : '—' },
     { key: 'priority', header: 'Priority', render: (r) => <Badge tone={r.priority === 'high' ? 'negative' : r.priority === 'low' ? 'steel' : 'accent'}>{r.priority || 'normal'}</Badge> },
     { key: 'status', header: 'Status', render: (r) => <Badge tone={STATUS_TONE[r.status] || 'steel'}>{r.status || 'pending'}</Badge> },
     ...(isAdmin ? [{
@@ -124,13 +134,25 @@ export default function Maintenance() {
               <input className="input-field font-mono" value={form.vehicleNoText} onChange={(e) => setForm({ ...form, vehicleNoText: e.target.value.toUpperCase() })} />
             </Field>
             <Field label="Service type">
-              <input className="input-field" placeholder="Oil change, tyre…" value={form.serviceType} onChange={(e) => setForm({ ...form, serviceType: e.target.value })} />
+              <select className="input-field" value={form.serviceType} onChange={(e) => setForm({ ...form, serviceType: e.target.value, inventoryItemId: '', inventoryQuantity: '' })}>
+                <option value="">Select service</option><option value="tyre">Tyre replacement</option><option value="urea">Urea refill</option><option value="diesel">Diesel refill</option><option value="custom">Other service</option>
+              </select>
             </Field>
           </div>
+          {!editing && ['tyre', 'urea', 'diesel'].includes(form.serviceType) && (
+            <div className="rounded border border-accent/20 bg-accent-soft/30 p-3 space-y-3">
+              <p className="text-sm font-medium text-ink">Use stock from inventory</p>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Available inventory"><select className="input-field" value={form.inventoryItemId} onChange={(e) => setForm({ ...form, inventoryItemId: e.target.value })}><option value="">Do not use inventory</option>{inventoryItems.filter((item) => item.status === 'available' && item.category === form.serviceType && Number(item.quantity) > 0).map((item) => <option key={item._id} value={item._id}>{item.name} — {item.quantity} {item.unit} available</option>)}</select></Field>
+                <Field label="Quantity used"><input disabled={!form.inventoryItemId} min="0.01" step="0.01" type="number" className="input-field disabled:opacity-50" value={form.inventoryQuantity} onChange={(e) => setForm({ ...form, inventoryQuantity: e.target.value })} /></Field>
+              </div>
+              <p className="text-xs text-steel">Saving this maintenance record deducts the selected quantity from Inventory and adds its cost to this record.</p>
+            </div>
+          )}
           <div className="grid grid-cols-3 gap-4">
             <Field label="Priority">
               <select className="input-field" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
-                <option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option>
+                <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option>
               </select>
             </Field>
             <Field label="Status">
@@ -145,6 +167,9 @@ export default function Maintenance() {
           </div>
           <Field label="Odometer due (km)">
             <input type="number" className="input-field" value={form.odometerDue} onChange={(e) => setForm({ ...form, odometerDue: e.target.value })} />
+          </Field>
+          <Field label="External service cost (₹)">
+            <input min="0" step="0.01" type="number" className="input-field" value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} />
           </Field>
           <Field label="Notes">
             <textarea rows={3} className="input-field" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />

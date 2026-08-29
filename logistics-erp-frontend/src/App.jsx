@@ -10,6 +10,10 @@ import Payments from './pages/Payments'
 import TripsList from './pages/trips/TripsList'
 import TripDetail from './pages/trips/TripDetail'
 import Users from './pages/Users'
+import Roles from './pages/Roles'
+import Inventory from './pages/Inventory'
+import Approvals from './pages/Approvals'
+import Fleets from './pages/Fleets'
 import { canAccess, defaultRouteFor } from './lib/roles'
 
 function Protected({ children, area }) {
@@ -27,6 +31,10 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<Protected area="dashboard"><Dashboard /></Protected>} />
           <Route path="/users" element={<Protected area="users"><Users /></Protected>} />
+          <Route path="/roles" element={<Protected area="users"><Roles /></Protected>} />
+          <Route path="/inventory" element={<Protected area="inventory"><Inventory /></Protected>} />
+          <Route path="/approvals" element={<Protected area="approvals"><Approvals /></Protected>} />
+          <Route path="/fleets" element={<Protected area="fleets"><Fleets /></Protected>} />
           <Route path="/trips" element={<Protected area="trips"><TripsList /></Protected>} />
           <Route path="/trips/:id" element={<Protected area="trips"><TripDetail /></Protected>} />
           <Route path="/drivers" element={<Protected area="drivers"><Drivers /></Protected>} />

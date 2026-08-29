@@ -1,11 +1,15 @@
 const asyncHandler = require("express-async-handler");
 const jwt = require("jsonwebtoken");
-const { User } = require("../models");
+const { User, Role } = require("../models");
+const { defaultRole } = require("../config/accessControl");
+const { getPermissions } = require("../middlewares/auth");
 
 const signToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || "7d",
   });
+
+const roleExists = async (role) => Boolean(defaultRole(role) || await Role.exists({ key: role }));
 
 // @route  POST /api/auth/register
 // @desc   Create a new employee/admin account (admin only)
@@ -22,13 +26,17 @@ const register = asyncHandler(async (req, res) => {
     res.status(400);
     throw new Error("A user with this email already exists");
   }
+  if (role && !(await roleExists(role))) {
+    res.status(400);
+    throw new Error("Invalid user role category");
+  }
 
   const user = await User.create({
     name,
     email,
     password,
     phone,
-    role: role === "admin" ? "admin" : "employee",
+    role: role || "employee",
   });
 
   res.status(201).json({
@@ -38,6 +46,7 @@ const register = asyncHandler(async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      permissions: await getPermissions(user.role),
       token: signToken(user._id),
     },
   });
@@ -70,6 +79,7 @@ const login = asyncHandler(async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      permissions: await getPermissions(user.role),
       token: signToken(user._id),
     },
   });
