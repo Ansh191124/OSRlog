@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   mongo:
     image: mongo:7
@@ -30,6 +28,8 @@ services:
         condition: service_healthy
     volumes:
       - ./uploads:/usr/src/app/uploads
+      - ./scripts:/usr/src/app/seed  
+    command: sh -c "npm install && npm start"
 
 volumes:
   mongodata:
