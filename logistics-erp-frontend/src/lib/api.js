@@ -44,6 +44,7 @@ export const AuthAPI = {
   login: (email, password) => api.post('/auth/login', { email, password }),
   register: (payload) => api.post('/auth/register', payload),
   me: () => api.get('/auth/me'),
+  changePassword: (currentPassword, newPassword) => api.put('/auth/change-password', { currentPassword, newPassword }),
 }
 
 // Admin-only on the API. Kept separate from public sign-up semantics.
@@ -148,5 +149,5 @@ export const DashboardAPI = {
 // ---- Server ----
 export const ServerStatusAPI = {
   // The health endpoint is mounted on the Express app, outside its /api router.
-  status: () => axios.get(`${SERVER_ROOT_URL}/server-status`),
+  status: () => axios.get(`${SERVER_ROOT_URL}/health`),
 }

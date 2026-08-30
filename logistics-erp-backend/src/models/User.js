@@ -15,6 +15,7 @@ const userSchema = new mongoose.Schema(
     role: { type: String, required: true, default: "employee", lowercase: true, trim: true },
     phone: { type: String },
     status: { type: String, enum: ["active", "inactive"], default: "active" },
+    forcePasswordChange: { type: Boolean, default: true },
   },
   { timestamps: true }
 );

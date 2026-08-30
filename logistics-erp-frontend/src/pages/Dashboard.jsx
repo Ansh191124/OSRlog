@@ -6,7 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 const PERIODS = ['daily', 'weekly', 'monthly', 'yearly']
 
 export default function Dashboard() {
-  const [period, setPeriod] = useState('monthly')
+  const [period, setPeriod] = useState('daily')
   const [overview, setOverview] = useState(null)
   const [trend, setTrend] = useState([])
   const [vehiclePerf, setVehiclePerf] = useState([])
@@ -35,7 +35,8 @@ export default function Dashboard() {
       }
     }
     load()
-    return () => { cancelled = true }
+    const timer = window.setInterval(load, 30000)
+    return () => { cancelled = true; window.clearInterval(timer) }
   }, [period])
 
   return (
@@ -43,7 +44,7 @@ export default function Dashboard() {
       <PageHeader
         eyebrow="Dispatch board"
         title="Overview"
-        description="Freight, expense and profit rolled up from every trip sheet logged by drivers and dispatch."
+        description="Live daily fleet, freight, expense and profit updates. Refreshes automatically every 30 seconds."
         action={
           <div className="flex gap-1 bg-white border border-line rounded p-1">
             {PERIODS.map((p) => (

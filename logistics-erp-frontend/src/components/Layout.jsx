@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Route, Users, Truck, Wrench, Wallet, UserCog, Package, ClipboardCheck, Building2, LogOut, Menu, X } from 'lucide-react'
+import { LayoutDashboard, Route, Users, Truck, Wrench, Wallet, UserCog, Package, ClipboardCheck, Building2, LogOut, Menu, X, BadgeCheck } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useState } from 'react'
 import { canAccess } from '../lib/roles'
@@ -24,6 +24,7 @@ export default function Layout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const doLogout = () => {
+    if (!window.confirm('Sign out of OSR Logistics?')) return
     logout()
     navigate('/login')
   }
@@ -50,7 +51,7 @@ export default function Layout({ children }) {
         </div>
         <div className="md:hidden h-14" />
 
-        <nav className="flex-1 px-4 py-6 overflow-y-auto">
+        <nav className="sidebar-scroll flex-1 px-4 py-6 overflow-y-auto">
           <div className="relative pl-4">
             <div className="absolute left-[7px] top-2 bottom-2 route-dashes" aria-hidden="true" />
             <ul className="space-y-1">
@@ -62,13 +63,13 @@ export default function Layout({ children }) {
                     onClick={() => setMobileOpen(false)}
                     className={({ isActive }) =>
                       `flex items-center gap-3 pl-4 pr-3 py-2.5 rounded-r text-sm font-medium transition-colors relative
-                       ${isActive ? 'bg-asphalt-3 text-white' : 'text-white/60 hover:text-white hover:bg-white/5'}`
+                       ${isActive ? 'bg-accent text-white shadow-sm' : 'text-white/60 hover:text-white hover:bg-white/5'}`
                     }
                   >
                     {({ isActive }) => (
                       <>
                         <span className={`absolute -left-[17px] w-2.5 h-2.5 rounded-full border-2 ${isActive ? 'bg-accent border-accent' : 'bg-asphalt border-white/30'}`} />
-                        <Icon className="w-4 h-4 shrink-0" />
+                        {isActive ? <BadgeCheck className="w-4 h-4 shrink-0" /> : <Icon className="w-4 h-4 shrink-0" />}
                         <span>{label}</span>
                       </>
                     )}

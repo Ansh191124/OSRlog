@@ -88,7 +88,7 @@ const updateUser = asyncHandler(async (req, res) => {
   if (phone !== undefined) user.phone = phone;
   if (status !== undefined) user.status = status;
   if (requestedRole !== undefined) user.role = requestedRole;
-  if (password) user.password = password;
+  if (password) { user.password = password; user.forcePasswordChange = true; }
 
   await user.save();
   res.json({ success: true, data: user });

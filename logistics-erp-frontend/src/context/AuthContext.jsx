@@ -28,10 +28,10 @@ export function AuthProvider({ children }) {
     localStorage.setItem('erp_user', JSON.stringify(u))
     setUser(u)
 
-    return true
+    return { ok: true, forcePasswordChange: Boolean(u.forcePasswordChange) }
   } catch (err) {
     setError(err?.response?.data?.message || 'Could not sign in. Check your credentials and the API connection.')
-    return false
+    return { ok: false }
   } finally {
     setLoading(false)
   }

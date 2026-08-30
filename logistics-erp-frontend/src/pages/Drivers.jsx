@@ -5,7 +5,7 @@ import { Modal, PageHeader, Badge, Field } from '../components/ui'
 import { Trash2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
-const EMPTY = { name: '', phone: '', licenseNumber: '', licenseExpiry: '', address: '', salary: '', status: 'active' }
+const EMPTY = { name: '', phone: '', licenseNumber: '', licenseExpiry: '', driverType: 'permanent', temporaryUntil: '', address: '', salary: '', status: 'active' }
 
 export default function Drivers() {
   const { user } = useAuth()
@@ -45,7 +45,7 @@ export default function Drivers() {
     setForm({
       name: row.name || '', phone: row.phone || '', licenseNumber: row.licenseNumber || '',
       licenseExpiry: row.licenseExpiry ? row.licenseExpiry.slice(0, 10) : '',
-      address: row.address || '', salary: row.salary ?? '', status: row.status || 'active',
+      driverType: row.driverType || 'permanent', temporaryUntil: row.temporaryUntil ? row.temporaryUntil.slice(0, 10) : '', address: row.address || '', salary: row.salaryAmount ?? '', status: row.status || 'active',
     })
     setModalOpen(true)
   }
@@ -54,7 +54,7 @@ export default function Drivers() {
     e.preventDefault()
     setSaving(true)
     try {
-      const payload = { ...form, salary: form.salary === '' ? undefined : Number(form.salary) }
+      const payload = { ...form, salaryAmount: form.salary === '' ? undefined : Number(form.salary) }; delete payload.salary
       if (editing) await DriversAPI.update(editing._id, payload)
       else await DriversAPI.create(payload)
       setModalOpen(false)
@@ -80,8 +80,9 @@ export default function Drivers() {
     { key: 'name', header: 'Name', render: (r) => <span className="font-medium">{r.name || '—'}</span> },
     { key: 'phone', header: 'Phone' },
     { key: 'licenseNumber', header: 'License #' },
-    { key: 'licenseExpiry', header: 'License Expiry', render: (r) => r.licenseExpiry ? r.licenseExpiry.slice(0, 10) : '—' },
-    { key: 'salary', header: 'Salary', render: (r) => r.salary !== undefined && r.salary !== null ? <span className="tabular">₹{Number(r.salary).toLocaleString('en-IN')}</span> : '—' },
+    { key: 'licenseExpiry', header: 'License Expiry', render: (r) => <LicenseRecommendation date={r.licenseExpiry} /> },
+    { key: 'driverType', header: 'Type', render: (r) => <Badge tone={r.driverType === 'temporary' ? 'accent' : 'steel'}>{r.driverType || 'permanent'}</Badge> },
+    { key: 'salaryAmount', header: 'Salary', render: (r) => r.salaryAmount !== undefined && r.salaryAmount !== null ? <span className="tabular">₹{Number(r.salaryAmount).toLocaleString('en-IN')}</span> : '—' },
     { key: 'status', header: 'Status', render: (r) => <Badge tone={r.status === 'active' ? 'positive' : 'steel'}>{r.status || 'unknown'}</Badge> },
     ...(isAdmin ? [{
       key: 'actions', header: '', render: (r) => (
@@ -116,7 +117,7 @@ export default function Drivers() {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit driver' : 'Add driver'}>
         <form onSubmit={save} className="space-y-4">
           <Field label="Full name">
-            <input className="input-field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <input required className="input-field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </Field>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Phone">
@@ -130,6 +131,7 @@ export default function Drivers() {
               </select>
             </Field>
           </div>
+          <div className="grid grid-cols-2 gap-4"><Field label="Driver type"><select className="input-field" value={form.driverType} onChange={e => setForm({ ...form, driverType: e.target.value })}><option value="permanent">Permanent</option><option value="temporary">Temporary</option></select></Field><Field label="Temporary until"><input disabled={form.driverType !== 'temporary'} type="date" className="input-field disabled:opacity-50" value={form.temporaryUntil} onChange={e => setForm({ ...form, temporaryUntil: e.target.value })} /></Field></div>
           <div className="grid grid-cols-2 gap-4">
             <Field label="License number">
               <input className="input-field" value={form.licenseNumber} onChange={(e) => setForm({ ...form, licenseNumber: e.target.value })} />
@@ -154,4 +156,12 @@ export default function Drivers() {
       </Modal>
     </div>
   )
+}
+
+function LicenseRecommendation({ date }) {
+  if (!date) return <span className="text-steel-light">—</span>
+  const days = Math.ceil((new Date(date) - new Date()) / 86400000)
+  const tone = days <= 30 ? 'negative' : days <= 60 ? 'accent' : 'positive'
+  const recommendation = days < 0 ? 'Renew immediately' : days <= 30 ? 'Renew now' : days <= 60 ? 'Renew soon' : 'Valid'
+  return <div><span className="tabular text-xs">{String(date).slice(0, 10)}</span><Badge tone={tone}>{recommendation}</Badge></div>
 }

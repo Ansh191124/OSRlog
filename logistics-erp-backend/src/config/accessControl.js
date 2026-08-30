@@ -4,6 +4,7 @@ const DEFAULT_ROLES = [
   { key: "entry_employee", name: "Entry employee", permissions: ["trips"] },
   { key: "accountant", name: "Accountant", permissions: ["payments", "approvals"] },
   { key: "co_admin", name: "Co-admin", permissions: ["dashboard", "drivers", "vehicles", "trips", "maintenance", "inventory", "payments", "approvals", "fleets"] },
+  { key: "client", name: "Client", permissions: ["fleets", "approvals", "payments"] },
 ];
 
 const PERMISSIONS = ["dashboard", "users", "drivers", "vehicles", "trips", "maintenance", "inventory", "payments", "approvals", "fleets"];

@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { register, login, me } = require("../controllers/authController");
+const { register, login, me, changePassword } = require("../controllers/authController");
 const { protect, authorize } = require("../middlewares/auth");
 
 // Public
@@ -16,5 +16,6 @@ router.post("/register", protect, authorize("admin"), register);
 // Use `npm run seed` to create the very first admin account.
 
 router.get("/me", protect, me);
+router.put("/change-password", protect, changePassword);
 
 module.exports = router;

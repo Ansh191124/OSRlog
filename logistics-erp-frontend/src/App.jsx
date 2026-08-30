@@ -14,6 +14,7 @@ import Roles from './pages/Roles'
 import Inventory from './pages/Inventory'
 import Approvals from './pages/Approvals'
 import Fleets from './pages/Fleets'
+import ChangePassword from './pages/ChangePassword'
 import { canAccess, defaultRouteFor } from './lib/roles'
 
 function Protected({ children, area }) {
@@ -29,6 +30,7 @@ export default function App() {
       <HashRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/change-password" element={<ChangePassword />} />
           <Route path="/" element={<Protected area="dashboard"><Dashboard /></Protected>} />
           <Route path="/users" element={<Protected area="users"><Users /></Protected>} />
           <Route path="/roles" element={<Protected area="users"><Roles /></Protected>} />

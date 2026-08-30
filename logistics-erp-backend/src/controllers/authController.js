@@ -47,6 +47,7 @@ const register = asyncHandler(async (req, res) => {
       email: user.email,
       role: user.role,
       permissions: await getPermissions(user.role),
+      forcePasswordChange: user.forcePasswordChange !== false,
       token: signToken(user._id),
     },
   });
@@ -80,6 +81,7 @@ const login = asyncHandler(async (req, res) => {
       email: user.email,
       role: user.role,
       permissions: await getPermissions(user.role),
+      forcePasswordChange: user.forcePasswordChange !== false,
       token: signToken(user._id),
     },
   });
@@ -90,4 +92,19 @@ const me = asyncHandler(async (req, res) => {
   res.json({ success: true, data: req.user });
 });
 
-module.exports = { register, login, me };
+const changePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword || newPassword.length < 8) {
+    res.status(400); throw new Error("Current password and a new password of at least 8 characters are required");
+  }
+  const user = await User.findById(req.user._id);
+  if (!(await user.comparePassword(currentPassword))) {
+    res.status(400); throw new Error("Current password is incorrect");
+  }
+  user.password = newPassword;
+  user.forcePasswordChange = false;
+  await user.save();
+  res.json({ success: true, message: "Password updated. Please sign in again." });
+});
+
+module.exports = { register, login, me, changePassword };

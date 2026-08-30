@@ -61,6 +61,8 @@
     background-image: repeating-linear-gradient(to bottom, var(--color-steel-light) 0 6px, transparent 6px 14px);
     width: 2px;
   }
+  .sidebar-scroll { scrollbar-width: none; }
+  .sidebar-scroll::-webkit-scrollbar { display: none; }
   .btn-accent {
     background: var(--color-accent);
     color: #fff;

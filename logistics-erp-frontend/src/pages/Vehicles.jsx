@@ -6,7 +6,7 @@ import { Trash2, AlertTriangle } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const EMPTY = {
-  vehicleNo: '', type: '', model: '', rcExpiry: '', insuranceExpiry: '',
+  vehicleNo: '', vehicleType: '', modelName: '', rcExpiry: '', insuranceExpiry: '',
   permitExpiry: '', fitnessExpiry: '', pucExpiry: '', status: 'active',
 }
 
@@ -51,7 +51,7 @@ export default function Vehicles() {
   const openEdit = (row) => {
     setEditing(row)
     setForm({
-      vehicleNo: row.vehicleNo || '', type: row.type || '', model: row.model || '',
+      vehicleNo: row.vehicleNo || '', vehicleType: row.vehicleType || '', modelName: row.modelName || '',
       rcExpiry: sliceDate(row.rcExpiry), insuranceExpiry: sliceDate(row.insuranceExpiry),
       permitExpiry: sliceDate(row.permitExpiry), fitnessExpiry: sliceDate(row.fitnessExpiry),
       pucExpiry: sliceDate(row.pucExpiry), status: row.status || 'active',
@@ -86,8 +86,8 @@ export default function Vehicles() {
 
   const columns = [
     { key: 'vehicleNo', header: 'Vehicle No.', render: (r) => <span className="font-mono font-semibold tabular">{r.vehicleNo || '—'}</span> },
-    { key: 'type', header: 'Type' },
-    { key: 'model', header: 'Model' },
+    { key: 'vehicleType', header: 'Type' },
+    { key: 'modelName', header: 'Model' },
     { key: 'insuranceExpiry', header: 'Insurance', render: (r) => <ExpiryCell date={r.insuranceExpiry} /> },
     { key: 'permitExpiry', header: 'Permit', render: (r) => <ExpiryCell date={r.permitExpiry} /> },
     { key: 'pucExpiry', header: 'PUC', render: (r) => <ExpiryCell date={r.pucExpiry} /> },
@@ -137,13 +137,13 @@ export default function Vehicles() {
         <form onSubmit={save} className="space-y-4">
           <div className="grid grid-cols-3 gap-4">
             <Field label="Vehicle number">
-              <input className="input-field font-mono" value={form.vehicleNo} onChange={(e) => setForm({ ...form, vehicleNo: e.target.value.toUpperCase() })} />
+              <input required className="input-field font-mono" value={form.vehicleNo} onChange={(e) => setForm({ ...form, vehicleNo: e.target.value.toUpperCase() })} />
             </Field>
             <Field label="Type">
-              <input className="input-field" placeholder="Truck / Trailer…" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} />
+              <select required className="input-field" value={form.vehicleType} onChange={(e) => setForm({ ...form, vehicleType: e.target.value })}><option value="">Select type</option><option>Truck</option><option>Trailer</option><option>Tipper</option><option>Tempo</option><option>Tyre carrier</option></select>
             </Field>
             <Field label="Model">
-              <input className="input-field" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
+              <input required className="input-field" value={form.modelName} onChange={(e) => setForm({ ...form, modelName: e.target.value })} />
             </Field>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { Circle, Loader2, Truck } from 'lucide-react'
 import { ServerStatusAPI } from '../lib/api'
@@ -7,7 +7,8 @@ import { ServerStatusAPI } from '../lib/api'
 export default function Login() {
   const { login, loading, error } = useAuth()
   const navigate = useNavigate()
-  const [email, setEmail] = useState('admin@logistics.com')
+  const location = useLocation()
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [serverStatus, setServerStatus] = useState('checking')
 
@@ -31,8 +32,8 @@ export default function Login() {
 
   const onSubmit = async (e) => {
     e.preventDefault()
-    const ok = await login(email, password)
-    if (ok) navigate('/')
+    const result = await login(email, password)
+    if (result.ok) navigate(result.forcePasswordChange ? '/change-password' : '/')
   }
 
   return (
@@ -56,6 +57,9 @@ export default function Login() {
             <div className="text-sm text-negative bg-negative-soft border border-negative/20 rounded px-3 py-2">
               {error}
             </div>
+          )}
+          {location.state?.passwordChanged && (
+            <div className="text-sm text-positive bg-positive-soft border border-positive/20 rounded px-3 py-2">Password updated. Sign in with your new password.</div>
           )}
 
           <div>
@@ -90,9 +94,6 @@ export default function Login() {
             {loading ? 'Checking manifest…' : 'Sign in'}
           </button>
 
-          <p className="text-xs text-steel text-center pt-1">
-            Default seeded admin: admin@logistics.com / Admin@123
-          </p>
         </form>
       </div>
 

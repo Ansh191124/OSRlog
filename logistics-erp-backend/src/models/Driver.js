@@ -11,6 +11,8 @@ const driverSchema = new Schema(
     address: { type: String },
     licenseNumber: { type: String },
     licenseExpiry: { type: Date },
+    driverType: { type: String, enum: ["permanent", "temporary"], default: "permanent" },
+    temporaryUntil: { type: Date },
     aadhaarNumber: { type: String },
     dateOfBirth: { type: Date },
     joiningDate: { type: Date },
