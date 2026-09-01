@@ -1,18 +1,20 @@
 import { useEffect, useState, useCallback } from 'react'
-import { VehiclesAPI } from '../lib/api'
+import { VehiclesAPI, UsersAPI } from '../lib/api'
 import DataTable from '../components/DataTable'
 import { Modal, PageHeader, Badge, Field } from '../components/ui'
-import { Trash2, AlertTriangle } from 'lucide-react'
+import { Trash2, AlertTriangle, Lock, LockOpen } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const EMPTY = {
   vehicleNo: '', vehicleType: '', modelName: '', rcExpiry: '', insuranceExpiry: '',
-  permitExpiry: '', fitnessExpiry: '', pucExpiry: '', status: 'active',
+  permitExpiry: '', fitnessExpiry: '', pucExpiry: '', status: 'active', remark: '', assignedEmployee: '',
 }
 
 export default function Vehicles() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
+  const canManage = ['admin', 'co_admin'].includes(user?.role)
+  const isEmployee = user?.role === 'employee'
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -24,6 +26,8 @@ export default function Vehicles() {
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
   const [expiring, setExpiring] = useState([])
+  const [mandatoryUnlocked, setMandatoryUnlocked] = useState(false)
+  const [employees, setEmployees] = useState([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -47,14 +51,17 @@ export default function Vehicles() {
 
   useEffect(() => { load() }, [load])
 
-  const openCreate = () => { setEditing(null); setForm(EMPTY); setModalOpen(true) }
+  const openCreate = () => { setEditing(null); setForm(EMPTY); setMandatoryUnlocked(false); setModalOpen(true) }
   const openEdit = (row) => {
     setEditing(row)
+    setMandatoryUnlocked(false)
+    if (canManage && !employees.length) UsersAPI.list({ role: 'employee' }).then((r) => setEmployees((r.data?.data || []).filter((u) => u.role === 'employee'))).catch(() => {})
     setForm({
       vehicleNo: row.vehicleNo || '', vehicleType: row.vehicleType || '', modelName: row.modelName || '',
       rcExpiry: sliceDate(row.rcExpiry), insuranceExpiry: sliceDate(row.insuranceExpiry),
       permitExpiry: sliceDate(row.permitExpiry), fitnessExpiry: sliceDate(row.fitnessExpiry),
-      pucExpiry: sliceDate(row.pucExpiry), status: row.status || 'active',
+      pucExpiry: sliceDate(row.pucExpiry), status: row.status || 'active', remark: row.remark || '',
+      assignedEmployee: row.assignedEmployee?._id || row.assignedEmployee || '',
     })
     setModalOpen(true)
   }
@@ -126,7 +133,7 @@ export default function Vehicles() {
         page={page}
         totalPages={totalPages}
         onPage={setPage}
-        onCreate={isAdmin ? openCreate : undefined}
+        onCreate={canManage ? openCreate : undefined}
         createLabel="Add vehicle"
         onRowClick={isAdmin ? openEdit : undefined}
         emptyTitle="No vehicles logged yet"
@@ -136,37 +143,57 @@ export default function Vehicles() {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit vehicle' : 'Add vehicle'} wide>
         <form onSubmit={save} className="space-y-4">
           <div className="grid grid-cols-3 gap-4">
-            <Field label="Vehicle number">
-              <input required className="input-field font-mono" value={form.vehicleNo} onChange={(e) => setForm({ ...form, vehicleNo: e.target.value.toUpperCase() })} />
+            <Field label={<span className="inline-flex items-center gap-1.5">Vehicle number {editing && <MandatoryLockIcon locked={!mandatoryUnlocked} />}</span>}>
+              <input required disabled={Boolean(editing) && !mandatoryUnlocked} className="input-field font-mono disabled:opacity-60 disabled:bg-paper-2" value={form.vehicleNo} onChange={(e) => setForm({ ...form, vehicleNo: e.target.value.toUpperCase() })} />
             </Field>
             <Field label="Type">
-              <select required className="input-field" value={form.vehicleType} onChange={(e) => setForm({ ...form, vehicleType: e.target.value })}><option value="">Select type</option><option>Truck</option><option>Trailer</option><option>Tipper</option><option>Tempo</option><option>Tyre carrier</option></select>
+              <select required disabled={Boolean(editing) && !mandatoryUnlocked} className="input-field disabled:opacity-60 disabled:bg-paper-2" value={form.vehicleType} onChange={(e) => setForm({ ...form, vehicleType: e.target.value })}><option value="">Select type</option><option>Truck</option><option>Trailer</option><option>Tipper</option><option>Tempo</option><option>Tyre carrier</option></select>
             </Field>
             <Field label="Model">
               <input required className="input-field" value={form.modelName} onChange={(e) => setForm({ ...form, modelName: e.target.value })} />
             </Field>
           </div>
+          {editing && isAdmin && !mandatoryUnlocked && (
+            <button type="button" onClick={() => setMandatoryUnlocked(true)} className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent-deep">
+              <LockOpen className="w-3.5 h-3.5" /> Edit mandatory fields (Admin)
+            </button>
+          )}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <Field label="RC expiry">
-              <input type="date" className="input-field" value={form.rcExpiry} onChange={(e) => setForm({ ...form, rcExpiry: e.target.value })} />
+              <input type="date" disabled={isEmployee} className="input-field disabled:opacity-60 disabled:bg-paper-2" value={form.rcExpiry} onChange={(e) => setForm({ ...form, rcExpiry: e.target.value })} />
             </Field>
             <Field label="Insurance expiry">
-              <input type="date" className="input-field" value={form.insuranceExpiry} onChange={(e) => setForm({ ...form, insuranceExpiry: e.target.value })} />
+              <input type="date" disabled={isEmployee} className="input-field disabled:opacity-60 disabled:bg-paper-2" value={form.insuranceExpiry} onChange={(e) => setForm({ ...form, insuranceExpiry: e.target.value })} />
             </Field>
             <Field label="Permit expiry">
-              <input type="date" className="input-field" value={form.permitExpiry} onChange={(e) => setForm({ ...form, permitExpiry: e.target.value })} />
+              <input type="date" disabled={isEmployee} className="input-field disabled:opacity-60 disabled:bg-paper-2" value={form.permitExpiry} onChange={(e) => setForm({ ...form, permitExpiry: e.target.value })} />
             </Field>
             <Field label="Fitness expiry">
-              <input type="date" className="input-field" value={form.fitnessExpiry} onChange={(e) => setForm({ ...form, fitnessExpiry: e.target.value })} />
+              <input type="date" disabled={isEmployee} className="input-field disabled:opacity-60 disabled:bg-paper-2" value={form.fitnessExpiry} onChange={(e) => setForm({ ...form, fitnessExpiry: e.target.value })} />
             </Field>
             <Field label="PUC expiry">
-              <input type="date" className="input-field" value={form.pucExpiry} onChange={(e) => setForm({ ...form, pucExpiry: e.target.value })} />
+              <input type="date" disabled={isEmployee} className="input-field disabled:opacity-60 disabled:bg-paper-2" value={form.pucExpiry} onChange={(e) => setForm({ ...form, pucExpiry: e.target.value })} />
             </Field>
             <Field label="Status">
               <select className="input-field" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
-                <option value="in_service">In service</option>
+                <option value="in_maintenance">In maintenance</option>
+                <option value="sold">Sold</option>
+              </select>
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Remark">
+              <input className="input-field" value={form.remark} onChange={(e) => setForm({ ...form, remark: e.target.value })} placeholder="Condition notes, issues, etc." />
+            </Field>
+            <Field label="Assigned employee">
+              <select disabled={!canManage} className="input-field disabled:opacity-60 disabled:bg-paper-2" value={form.assignedEmployee} onChange={(e) => setForm({ ...form, assignedEmployee: e.target.value })}>
+                <option value="">Unassigned</option>
+                {employees.map((emp) => <option key={emp._id} value={emp._id}>{emp.name}</option>)}
+                {form.assignedEmployee && !employees.find((e) => e._id === form.assignedEmployee) && editing?.assignedEmployee?.name && (
+                  <option value={form.assignedEmployee}>{editing.assignedEmployee.name}</option>
+                )}
               </select>
             </Field>
           </div>
@@ -183,6 +210,12 @@ export default function Vehicles() {
 }
 
 function sliceDate(d) { return d ? String(d).slice(0, 10) : '' }
+
+function MandatoryLockIcon({ locked }) {
+  return locked
+    ? <Lock className="w-3 h-3 text-steel" title="Locked — admin only" />
+    : <LockOpen className="w-3 h-3 text-accent-deep" title="Unlocked for editing" />
+}
 
 function ExpiryCell({ date }) {
   if (!date) return <span className="text-steel-light">—</span>

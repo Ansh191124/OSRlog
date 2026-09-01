@@ -1,17 +1,19 @@
 const asyncHandler = require("express-async-handler");
-const { ApprovalRequest, Payment, InventoryItem } = require("../models");
+const { ApprovalRequest, Payment, InventoryItem, Fleet } = require("../models");
 
 const getRequests = asyncHandler(async (req, res) => {
   const where = {};
   if (req.query.status) where.status = req.query.status;
   if (req.query.requestType) where.requestType = req.query.requestType;
   if (req.user.role === "employee") where.requestedBy = req.user._id;
+  if (req.user.role === "client") where.requestedBy = req.user._id;
   const rows = await ApprovalRequest.find(where)
     .populate("requestedBy approvedBy paidBy", "name role")
     .populate("driver", "name")
     .populate("vehicle", "vehicleNo")
     .populate("maintenance", "maintenanceType")
     .populate("inventoryItem", "name")
+    .populate("fleet", "name clientName fleetCodeFrom fleetCodeTo reservedVehicleCount")
     .sort({ createdAt: -1 });
   res.json({ success: true, data: rows });
 });
@@ -31,6 +33,9 @@ const approveRequest = asyncHandler(async (req, res) => {
   if (record.status !== "requested") { res.status(400); throw new Error("Only requested items can be approved"); }
   record.status = "approved"; record.approvedBy = req.user._id; record.approvedAt = new Date();
   await record.save();
+  if (record.requestType === "fleet_reservation" && record.fleet) {
+    await Fleet.findByIdAndUpdate(record.fleet, { reservationStatus: "approved" });
+  }
   res.json({ success: true, data: record });
 });
 
@@ -40,6 +45,10 @@ const rejectRequest = asyncHandler(async (req, res) => {
   if (record.status !== "requested") { res.status(400); throw new Error("Only requested items can be rejected"); }
   record.status = "rejected"; record.rejectionReason = req.body.reason || "Rejected"; record.approvedBy = req.user._id; record.approvedAt = new Date();
   await record.save();
+  if (record.requestType === "fleet_reservation" && record.fleet) {
+    // Free up the reserved vehicle-number range so another client can take it.
+    await Fleet.findByIdAndUpdate(record.fleet, { reservationStatus: "none", status: "inactive" });
+  }
   res.json({ success: true, data: record });
 });
 

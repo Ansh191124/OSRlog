@@ -20,6 +20,7 @@ const roleRoutes = require("./routes/roleRoutes");
 const inventoryRoutes = require("./routes/inventoryRoutes");
 const approvalRequestRoutes = require("./routes/approvalRequestRoutes");
 const fleetRoutes = require("./routes/fleetRoutes");
+const orgSettingsRoutes = require("./routes/orgSettingsRoutes");
 
 const app = express();
 
@@ -64,6 +65,7 @@ app.use(`${API_PREFIX}/roles`, roleRoutes);
 app.use(`${API_PREFIX}/inventory`, inventoryRoutes);
 app.use(`${API_PREFIX}/approvals`, approvalRequestRoutes);
 app.use(`${API_PREFIX}/fleets`, fleetRoutes);
+app.use(`${API_PREFIX}/settings`, orgSettingsRoutes);
 app.use(`${API_PREFIX}/drivers`, driverRoutes);
 app.use(`${API_PREFIX}/vehicles`, vehicleRoutes);
 app.use(`${API_PREFIX}/trips`, tripRoutes);

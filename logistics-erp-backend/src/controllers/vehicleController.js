@@ -7,6 +7,7 @@ const getVehicles = asyncHandler(async (req, res) => {
   const { status, search } = req.query;
   const { page, limit, skip } = getPagination(req.query);
   const where = {};
+  if (req.user.role === "employee") where.assignedEmployee = req.user._id;
   if (status) where.status = status;
   if (search) {
     where.$or = [
@@ -17,7 +18,7 @@ const getVehicles = asyncHandler(async (req, res) => {
   }
 
   const [rows, count] = await Promise.all([
-    Vehicle.find(where).sort({ createdAt: -1 }).skip(skip).limit(limit),
+    Vehicle.find(where).populate("assignedEmployee", "name role").sort({ createdAt: -1 }).skip(skip).limit(limit),
     Vehicle.countDocuments(where),
   ]);
 
@@ -29,10 +30,14 @@ const getVehicles = asyncHandler(async (req, res) => {
 });
 
 const getVehicle = asyncHandler(async (req, res) => {
-  const vehicle = await Vehicle.findById(req.params.id);
+  const vehicle = await Vehicle.findById(req.params.id).populate("assignedEmployee", "name role");
   if (!vehicle) {
     res.status(404);
     throw new Error("Vehicle not found");
+  }
+  if (req.user.role === "employee" && String(vehicle.assignedEmployee?._id) !== String(req.user._id)) {
+    res.status(403);
+    throw new Error("This vehicle is not assigned to you");
   }
   const drivers = await Driver.find({ assignedVehicle: vehicle._id }).select("name phone");
   res.json({ success: true, data: { ...vehicle.toJSON(), drivers } });
@@ -48,8 +53,28 @@ const createVehicle = asyncHandler(async (req, res) => {
   res.status(201).json({ success: true, data: vehicle });
 });
 
+// Employees manage the day-to-day condition of the vehicles assigned to them
+// (status, odometer, remark) but only an admin/co-admin can reassign a vehicle
+// to a different employee or edit its mandatory identity fields.
+const EMPLOYEE_EDITABLE_FIELDS = ["status", "remark", "currentOdometer"];
+
 const updateVehicle = asyncHandler(async (req, res) => {
-  const vehicle = await Vehicle.findByIdAndUpdate(req.params.id, req.body, {
+  const existing = await Vehicle.findById(req.params.id);
+  if (!existing) {
+    res.status(404);
+    throw new Error("Vehicle not found");
+  }
+
+  let payload = req.body;
+  if (req.user.role === "employee") {
+    if (String(existing.assignedEmployee) !== String(req.user._id)) {
+      res.status(403);
+      throw new Error("You can only update the status of vehicles assigned to you");
+    }
+    payload = Object.fromEntries(Object.entries(req.body).filter(([key]) => EMPLOYEE_EDITABLE_FIELDS.includes(key)));
+  }
+
+  const vehicle = await Vehicle.findByIdAndUpdate(req.params.id, payload, {
     new: true,
     runValidators: true,
   });

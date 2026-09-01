@@ -75,11 +75,24 @@ export default function Login() {
             <div className="text-sm text-accent-deep bg-accent-soft border border-accent/20 rounded px-3 py-2">Please open OSR Logistics on a desktop or laptop to sign in.</div>
           )}
 
+          <div className="md:hidden text-xs text-steel bg-paper-2 border border-line rounded px-3 py-2">
+            For the full dashboard experience, open this on a laptop or desktop.
+          </div>
+
+          <div className="md:hidden text-xs text-steel bg-paper-2 border border-line rounded px-3 py-2">
+            For the full dashboard experience, open this on a laptop or desktop.
+          </div>
+
+          <div className="md:hidden text-xs text-steel bg-paper-2 border border-line rounded px-3 py-2">
+            For the full dashboard experience, open this on a laptop or desktop.
+          </div>
+
           <div>
             <span className="label-field">Email</span>
             <input
               type="email"
               required
+              autoComplete="off"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="input-field"
@@ -91,6 +104,7 @@ export default function Login() {
             <input
               type="password"
               required
+              autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="input-field"

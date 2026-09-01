@@ -8,6 +8,7 @@ const {
   deletePayment,
   getPaymentSummary,
   uploadReceipt,
+  verifyPayment,
 } = require("../controllers/paymentController");
 const { protect, authorize, requirePermission } = require("../middlewares/auth");
 const { upload, setUploadFolder } = require("../middlewares/upload");
@@ -22,5 +23,6 @@ router.put("/:id", updatePayment);
 router.delete("/:id", authorize("admin"), deletePayment);
 
 router.post("/:id/receipt", setUploadFolder("payments"), upload.single("file"), uploadReceipt);
+router.put("/:id/verify", authorize("admin", "accountant"), verifyPayment);
 
 module.exports = router;

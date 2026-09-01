@@ -5,6 +5,6 @@ const router = express.Router();
 router.use(protect, requirePermission("fleets"));
 router.get("/", getFleets);
 router.post("/", createFleet);
-router.put("/:id", updateFleet);
-router.put("/:id/assign", authorize("admin", "co_admin"), assignFleet);
+router.put("/:id", authorize("admin", "co_admin"), updateFleet);
+router.put("/:id/assign", authorize("admin", "co_admin", "employee"), assignFleet);
 module.exports = router;

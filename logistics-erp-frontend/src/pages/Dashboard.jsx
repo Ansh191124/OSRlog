@@ -1,11 +1,90 @@
 import { useEffect, useState } from 'react'
-import { DashboardAPI } from '../lib/api'
+import { DashboardAPI, FleetsAPI, OrgSettingsAPI } from '../lib/api'
 import { StatCard, LoadState, ErrorState, PageHeader, Badge } from '../components/ui'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line } from 'recharts'
+import { useAuth } from '../context/AuthContext'
 
 const PERIODS = ['daily', 'weekly', 'monthly', 'yearly']
 
 export default function Dashboard() {
+  const { user } = useAuth()
+  if (user?.role === 'client') return <ClientDashboard />
+  return <AdminDashboard />
+}
+
+function ClientDashboard() {
+  const [fleets, setFleets] = useState([])
+  const [pool, setPool] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true); setError(null)
+      try {
+        const [fl, pl] = await Promise.all([FleetsAPI.list(), OrgSettingsAPI.fleetPool()])
+        if (cancelled) return
+        setFleets(fl.data?.data || [])
+        setPool(pl.data?.data || null)
+      } catch (err) {
+        if (!cancelled) setError(err?.response?.data?.message || 'Could not load your fleet overview.')
+      } finally { if (!cancelled) setLoading(false) }
+    }
+    load()
+    const timer = window.setInterval(load, 30000)
+    return () => { cancelled = true; window.clearInterval(timer) }
+  }, [])
+
+  const reserved = fleets.filter((f) => f.reservationStatus === 'reserved').length
+  const approved = fleets.filter((f) => f.reservationStatus === 'approved').length
+  const running = fleets.filter((f) => f.status === 'active').length
+  const totalVehicles = fleets.reduce((sum, f) => sum + (f.vehicles?.length || 0), 0)
+
+  return (
+    <div>
+      <PageHeader eyebrow="Your fleet" title="Fleet overview" description="Live status of the fleets you've reserved. Refreshes automatically every 30 seconds." />
+      {loading && <LoadState label="Pulling your fleet status" />}
+      {!loading && error && <ErrorState message={error} />}
+      {!loading && !error && (
+        <div className="space-y-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <StatCard label="Awaiting Approval" value={reserved} sub="Sent to admin" />
+            <StatCard label="Approved" value={approved} sub="Waiting on vehicle assignment" />
+            <StatCard label="Running" value={running} sub="Vehicles assigned and active" />
+            <StatCard label="Vehicles Assigned" value={totalVehicles} sub="Across all your fleets" />
+          </div>
+          {pool && (
+            <div className="card p-5">
+              <h2 className="font-display text-lg mb-2">Fleet pool availability</h2>
+              <p className="text-sm text-steel">{pool.remainingSlots} of {pool.totalSlots} serial fleet slots ({pool.fleetPrefix}-{pool.fleetRangeStart} to {pool.fleetPrefix}-{pool.fleetRangeEnd}) are currently unreserved.</p>
+            </div>
+          )}
+          <div className="card p-5">
+            <h2 className="font-display text-lg mb-4">Your fleets</h2>
+            {fleets.length ? (
+              <div className="space-y-3">
+                {fleets.map((f) => (
+                  <div key={f._id} className="flex items-center justify-between border border-line rounded px-4 py-3">
+                    <div>
+                      <p className="font-medium">{f.name}</p>
+                      <p className="text-xs text-steel font-mono">{f.fleetCodeFrom} – {f.fleetCodeTo} · {f.reservedVehicleCount} vehicle(s)</p>
+                    </div>
+                    <Badge tone={f.status === 'active' ? 'positive' : f.reservationStatus === 'approved' ? 'accent' : 'default'}>
+                      {f.status === 'active' ? 'Running' : f.reservationStatus === 'approved' ? 'Approved · awaiting assignment' : f.reservationStatus === 'reserved' ? 'Awaiting admin approval' : f.status.replace('_', ' ')}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="text-sm text-steel py-6 text-center">No fleets reserved yet.</p>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AdminDashboard() {
   const [period, setPeriod] = useState('daily')
   const [overview, setOverview] = useState(null)
   const [trend, setTrend] = useState([])
@@ -79,22 +158,10 @@ export default function Dashboard() {
             <StatCard label="Maintenance Pending" value={overview?.maintenanceCounts?.pending ?? overview?.pendingMaintenance ?? '—'} sub="Needs scheduling" />
           </div>
 
-          <div className="card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-display text-lg">Today's fleet</h2>
-              <Badge tone="positive">Live</Badge>
-            </div>
-            {overview?.dailyFleet?.length ? (
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {overview.dailyFleet.map((trip) => (
-                  <div key={trip._id} className="border border-line rounded p-3">
-                    <p className="font-mono font-semibold text-sm">{trip.vehicle?.vehicleNo || trip.vehicleNoText || 'Vehicle pending'}</p>
-                    <p className="text-sm text-steel mt-1">{trip.driver?.name || trip.driverNameText || 'Driver pending'}</p>
-                    <p className="text-xs text-steel-light mt-2">{trip.tripCode} · {trip.status}</p>
-                  </div>
-                ))}
-              </div>
-            ) : <p className="text-sm text-steel py-5 text-center">No fleet trips have been scheduled for today.</p>}
+          <div className="grid md:grid-cols-3 gap-4">
+            <StatCard label="Today's Fleet Activity" value={overview?.fleetCounts?.today ?? '—'} sub="Fleets created or updated today · live" />
+            <StatCard label="Fleets Reserved" value={overview?.fleetCounts?.reserved ?? '—'} sub="Awaiting or holding a reservation" />
+            <StatCard label="Fleets Running" value={overview?.fleetCounts?.running ?? '—'} sub="Vehicles assigned, in service" />
           </div>
 
           <div className="card p-5">

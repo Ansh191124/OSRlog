@@ -4,6 +4,7 @@ const { Schema } = mongoose;
 // A single approval queue used by driver advances, maintenance work and stock purchases.
 const approvalRequestSchema = new Schema({
   requestType: { type: String, enum: ["driver_payment", "maintenance", "inventory_purchase", "fleet_reservation"], required: true },
+  fleet: { type: Schema.Types.ObjectId, ref: "Fleet" },
   title: { type: String, required: true, trim: true },
   amount: { type: Number, required: true, min: 0 },
   paymentType: { type: String, enum: ["cash", "online"], default: "cash" },

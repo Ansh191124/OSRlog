@@ -6,6 +6,7 @@ const paymentSchema = new Schema(
     trip: { type: Schema.Types.ObjectId, ref: "Trip" },
     vehicle: { type: Schema.Types.ObjectId, ref: "Vehicle" },
     driver: { type: Schema.Types.ObjectId, ref: "Driver" },
+    fleet: { type: Schema.Types.ObjectId, ref: "Fleet" },
 
     partyName: { type: String },
     date: { type: Date },
@@ -14,7 +15,7 @@ const paymentSchema = new Schema(
 
     category: {
       type: String,
-      enum: ["freight", "advance", "expense", "salary", "maintenance", "fuel", "other"],
+      enum: ["freight", "advance", "expense", "salary", "maintenance", "fuel", "fleet_reservation", "other"],
     },
 
     paymentType: { type: String, enum: ["cash", "online"] },
@@ -25,9 +26,15 @@ const paymentSchema = new Schema(
     transactionRef: { type: String },
     bankName: { type: String },
 
+    // For cash fleet payments: who the client says they physically paid.
+    paidToName: { type: String },
+
     amount: { type: Number },
 
+    // "pending" = client-submitted, awaiting accountant verification.
     status: { type: String, enum: ["pending", "completed", "failed"], default: "completed" },
+    verifiedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    verifiedAt: { type: Date },
 
     receiptUrl: { type: String },
     remark: { type: String },

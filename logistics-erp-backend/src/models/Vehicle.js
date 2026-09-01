@@ -34,6 +34,7 @@ const vehicleSchema = new Schema(
       default: "active",
     },
     remark: { type: String },
+    assignedEmployee: { type: Schema.Types.ObjectId, ref: "User" },
     createdBy: { type: Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }

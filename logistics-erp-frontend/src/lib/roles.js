@@ -13,7 +13,7 @@ export const ROLE_ACCESS = {
   employee: ['drivers', 'vehicles', 'maintenance', 'inventory', 'approvals', 'fleets'],
   entry_employee: ['trips'],
   accountant: ['payments', 'approvals'],
-  client: ['fleets', 'approvals', 'payments'],
+  client: ['dashboard', 'fleets', 'approvals', 'payments'],
 }
 
 export function canAccess(user, area) {

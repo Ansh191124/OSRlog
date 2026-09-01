@@ -14,6 +14,8 @@ const fleetSchema = new Schema({
   fleetCodeTo: { type: String, trim: true },
   reservedVehicleCount: { type: Number, min: 0, default: 0 },
   reservationStatus: { type: String, enum: ["none", "reserved", "approved"], default: "none" },
+  reservationStartDate: { type: Date },
+  reservationEndDate: { type: Date },
   createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
   notes: String,
 }, { timestamps: true });

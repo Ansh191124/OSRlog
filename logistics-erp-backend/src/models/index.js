@@ -9,10 +9,11 @@ const InventoryItem = require("./InventoryItem");
 const InventoryUsage = require("./InventoryUsage");
 const ApprovalRequest = require("./ApprovalRequest");
 const Fleet = require("./Fleet");
+const OrgSettings = require("./OrgSettings");
 
 // Relationships in Mongoose are declared directly in each schema via
 // `{ type: Schema.Types.ObjectId, ref: "ModelName" }` and resolved at query
 // time with `.populate("fieldName")` - there's no separate association step
 // like Sequelize needed.
 
-module.exports = { User, Driver, Vehicle, Trip, Maintenance, Payment, Role, InventoryItem, InventoryUsage, ApprovalRequest, Fleet };
+module.exports = { User, Driver, Vehicle, Trip, Maintenance, Payment, Role, InventoryItem, InventoryUsage, ApprovalRequest, Fleet, OrgSettings };

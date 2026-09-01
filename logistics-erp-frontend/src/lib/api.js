@@ -2,7 +2,7 @@ import axios from 'axios'
 import { cacheResponse, invalidateCache, readCached } from './requestCache'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
-const SERVER_ROOT_URL = BASE_URL.replace(/\/api\/?$/, '')
+export const SERVER_ROOT_URL = BASE_URL.replace(/\/api\/?$/, '')
 
 export const api = axios.create({ baseURL: BASE_URL })
 
@@ -76,6 +76,11 @@ export const FleetsAPI = {
   update: (id, payload) => api.put(`/fleets/${id}`, payload), assign: (id, payload) => api.put(`/fleets/${id}/assign`, payload),
 }
 
+export const OrgSettingsAPI = {
+  fleetPool: () => api.get('/settings/fleet-pool'),
+  updateFleetPool: (payload) => api.put('/settings/fleet-pool', payload),
+}
+
 // ---- Drivers ----
 export const DriversAPI = {
   list: (params) => api.get('/drivers', { params }),
@@ -135,6 +140,8 @@ export const PaymentsAPI = {
   create: (payload) => api.post('/payments', payload),
   update: (id, payload) => api.put(`/payments/${id}`, payload),
   remove: (id) => api.delete(`/payments/${id}`),
+  uploadReceipt: (id, formData) => api.post(`/payments/${id}/receipt`, formData),
+  verify: (id, payload) => api.put(`/payments/${id}/verify`, payload),
   uploadReceipt: (id, formData) => api.post(`/payments/${id}/receipt`, formData),
 }
 

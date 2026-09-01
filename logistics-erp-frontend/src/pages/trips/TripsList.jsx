@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { TripsAPI } from '../../lib/api'
+import { TripsAPI, VehiclesAPI } from '../../lib/api'
 import DataTable from '../../components/DataTable'
 import { Modal, PageHeader, Badge, Field } from '../../components/ui'
 
@@ -17,6 +17,14 @@ export default function TripsList() {
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
+  const [vehicleOptions, setVehicleOptions] = useState([])
+
+  useEffect(() => {
+    VehiclesAPI.list({ limit: 200 }).then((res) => {
+      const data = res.data?.data || res.data || []
+      setVehicleOptions(Array.isArray(data) ? data.map((v) => v.vehicleNo).filter(Boolean) : [])
+    }).catch(() => {})
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -91,7 +99,10 @@ export default function TripsList() {
         <form onSubmit={create} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <Field label="Vehicle number">
-              <input required className="input-field font-mono" value={form.vehicleNoText} onChange={(e) => setForm({ ...form, vehicleNoText: e.target.value.toUpperCase() })} />
+              <input list="trip-vehicle-options" required className="input-field font-mono" value={form.vehicleNoText} onChange={(e) => setForm({ ...form, vehicleNoText: e.target.value.toUpperCase() })} placeholder="Select or type…" />
+              <datalist id="trip-vehicle-options">
+                {vehicleOptions.map((v) => <option key={v} value={v} />)}
+              </datalist>
             </Field>
             <Field label="Driver name">
               <input required className="input-field" value={form.driverNameText} onChange={(e) => setForm({ ...form, driverNameText: e.target.value })} />

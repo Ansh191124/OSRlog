@@ -1,6 +1,6 @@
 const asyncHandler = require("express-async-handler");
 const mongoose = require("mongoose");
-const { Trip, Maintenance, Payment, Vehicle } = require("../models");
+const { Trip, Maintenance, Payment, Vehicle, Fleet } = require("../models");
 const { endOfDay } = require("../utils/api");
 
 // Maps a friendly period name to a MongoDB $dateTrunc unit
@@ -126,12 +126,18 @@ const getOverview = asyncHandler(async (req, res) => {
   const [totalVehicles, activeVehicles, dailyFleet] = await Promise.all([
     Vehicle.countDocuments(),
     Vehicle.countDocuments({ status: "active" }),
-    Trip.find({ startDate: { $gte: startOfToday, $lt: startOfTomorrow }, status: { $ne: "cancelled" } })
-      .select("tripCode vehicleNoText driverNameText status")
-      .populate("vehicle", "vehicleNo")
-      .populate("driver", "name")
-      .sort({ createdAt: -1 })
-      .lean(),
+  ]);
+
+  const [totalFleets, reservedFleets, runningFleets, todayFleets] = await Promise.all([
+    Fleet.countDocuments(),
+    Fleet.countDocuments({ reservationStatus: { $in: ["reserved", "approved"] } }),
+    Fleet.countDocuments({ status: "active" }),
+    Fleet.countDocuments({
+      $or: [
+        { createdAt: { $gte: startOfToday, $lt: startOfTomorrow } },
+        { updatedAt: { $gte: startOfToday, $lt: startOfTomorrow } },
+      ],
+    }),
   ]);
 
   res.json({
@@ -142,7 +148,7 @@ const getOverview = asyncHandler(async (req, res) => {
       maintenanceCounts,
       paymentTotals,
       vehicleCounts: { active: activeVehicles, total: totalVehicles },
-      dailyFleet,
+      fleetCounts: { total: totalFleets, reserved: reservedFleets, running: runningFleets, today: todayFleets },
     },
   });
 });

@@ -46,7 +46,9 @@ export default function Layout({ children }) {
         ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0
       `}>
         <div className="hidden md:flex items-center gap-2 px-6 py-6 border-b border-white/10">
-          <div className="w-2.5 h-2.5 rounded-full bg-accent" />
+          <div className="w-8 h-8 rounded-md bg-accent/15 border border-accent/30 flex items-center justify-center">
+            <Truck className="w-4 h-4 text-accent" />
+          </div>
           <span className="font-display text-xl tracking-wide">OSR LOGISTICS</span>
         </div>
         <div className="md:hidden h-14" />
@@ -63,7 +65,7 @@ export default function Layout({ children }) {
                     onClick={() => setMobileOpen(false)}
                     className={({ isActive }) =>
                       `flex items-center gap-3 pl-4 pr-3 py-2.5 rounded-r text-sm font-medium transition-colors relative
-                       ${isActive ? 'bg-accent text-white shadow-sm' : 'text-white/60 hover:text-white hover:bg-white/5'}`
+                       ${isActive ? 'bg-accent/90 text-white shadow-sm ring-1 ring-accent/40' : 'text-white/60 hover:text-white hover:bg-white/5'}`
                     }
                   >
                     {({ isActive }) => (
@@ -81,17 +83,20 @@ export default function Layout({ children }) {
         </nav>
 
         <div className="px-4 py-4 border-t border-white/10">
-          <div className="px-2 mb-3">
-            <p className="text-sm font-medium truncate">{user?.name || user?.email || 'User'}</p>
-            <p className="text-xs text-white/50 capitalize">{user?.role || 'member'}</p>
+          <div className="flex items-center justify-between gap-2 rounded border border-white/15 bg-white/5 px-3 py-2 mb-1">
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">{user?.name || user?.email || 'User'}</p>
+              <p className="text-xs text-white/50 capitalize truncate">{user?.role || 'member'}</p>
+            </div>
+            <button
+              onClick={doLogout}
+              aria-label="Sign out"
+              title="Sign out"
+              className="shrink-0 p-1.5 rounded text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
-          <button
-            onClick={doLogout}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            Sign out
-          </button>
         </div>
       </aside>
 

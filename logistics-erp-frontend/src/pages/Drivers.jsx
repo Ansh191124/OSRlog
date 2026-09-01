@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { DriversAPI } from '../lib/api'
 import DataTable from '../components/DataTable'
 import { Modal, PageHeader, Badge, Field } from '../components/ui'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Lock, LockOpen } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const EMPTY = { name: '', phone: '', licenseNumber: '', licenseExpiry: '', driverType: 'permanent', temporaryUntil: '', address: '', salary: '', status: 'active' }
@@ -20,6 +20,7 @@ export default function Drivers() {
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
+  const [mandatoryUnlocked, setMandatoryUnlocked] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -39,9 +40,10 @@ export default function Drivers() {
 
   useEffect(() => { load() }, [load])
 
-  const openCreate = () => { setEditing(null); setForm(EMPTY); setModalOpen(true) }
+  const openCreate = () => { setEditing(null); setForm(EMPTY); setMandatoryUnlocked(false); setModalOpen(true) }
   const openEdit = (row) => {
     setEditing(row)
+    setMandatoryUnlocked(false)
     setForm({
       name: row.name || '', phone: row.phone || '', licenseNumber: row.licenseNumber || '',
       licenseExpiry: row.licenseExpiry ? row.licenseExpiry.slice(0, 10) : '',
@@ -133,13 +135,18 @@ export default function Drivers() {
           </div>
           <div className="grid grid-cols-2 gap-4"><Field label="Driver type"><select className="input-field" value={form.driverType} onChange={e => setForm({ ...form, driverType: e.target.value })}><option value="permanent">Permanent</option><option value="temporary">Temporary</option></select></Field><Field label="Temporary until"><input disabled={form.driverType !== 'temporary'} type="date" className="input-field disabled:opacity-50" value={form.temporaryUntil} onChange={e => setForm({ ...form, temporaryUntil: e.target.value })} /></Field></div>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="License number">
-              <input required className="input-field" value={form.licenseNumber} onChange={(e) => setForm({ ...form, licenseNumber: e.target.value })} />
+            <Field label={<span className="inline-flex items-center gap-1.5">License number {editing && <MandatoryLockIcon locked={!mandatoryUnlocked} />}</span>}>
+              <input disabled={Boolean(editing) && !mandatoryUnlocked} className="input-field disabled:opacity-60 disabled:bg-paper-2" value={form.licenseNumber} onChange={(e) => setForm({ ...form, licenseNumber: e.target.value })} />
             </Field>
             <Field label="License expiry">
               <input required type="date" className="input-field" value={form.licenseExpiry} onChange={(e) => setForm({ ...form, licenseExpiry: e.target.value })} />
             </Field>
           </div>
+          {editing && isAdmin && !mandatoryUnlocked && (
+            <button type="button" onClick={() => setMandatoryUnlocked(true)} className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent-deep">
+              <LockOpen className="w-3.5 h-3.5" /> Edit mandatory fields (Admin)
+            </button>
+          )}
           <Field label="Address">
             <input className="input-field" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
           </Field>
@@ -164,4 +171,10 @@ function LicenseRecommendation({ date }) {
   const tone = days <= 30 ? 'negative' : days <= 60 ? 'accent' : 'positive'
   const recommendation = days < 0 ? 'Renew immediately' : days <= 30 ? 'Renew now' : days <= 60 ? 'Renew soon' : 'Valid'
   return <div><span className="tabular text-xs">{String(date).slice(0, 10)}</span><Badge tone={tone}>{recommendation}</Badge></div>
+}
+
+function MandatoryLockIcon({ locked }) {
+  return locked
+    ? <Lock className="w-3 h-3 text-steel" title="Locked — admin only" />
+    : <LockOpen className="w-3 h-3 text-accent-deep" title="Unlocked for editing" />
 }

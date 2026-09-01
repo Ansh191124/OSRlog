@@ -1,17 +1,20 @@
 import { useEffect, useState, useCallback } from 'react'
-import { PaymentsAPI, VehiclesAPI } from '../lib/api'
+import { PaymentsAPI, SERVER_ROOT_URL } from '../lib/api'
 import DataTable from '../components/DataTable'
 import { Modal, PageHeader, Badge, Field, StatCard, Money } from '../components/ui'
-import { Trash2 } from 'lucide-react'
+import { Trash2, ShieldCheck, ShieldX, ExternalLink } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const EMPTY = { partyName: '', paymentType: 'cash', direction: 'received', category: 'freight', amount: '', date: '', vehicleId: '', notes: '' }
 
 export default function Payments() {
   const { user } = useAuth()
+  const isClient = user?.role === 'client'
   const canManageCashbook = user?.role === 'admin' || user?.role === 'accountant'
+  const canVerify = user?.role === 'admin' || user?.role === 'accountant'
   const [rows, setRows] = useState([])
   const [summary, setSummary] = useState(null)
+  const [pendingFleetPayments, setPendingFleetPayments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [typeFilter, setTypeFilter] = useState('')
@@ -26,21 +29,33 @@ export default function Payments() {
     setLoading(true)
     setError(null)
     try {
-      const [res, sm] = await Promise.all([
+      const calls = [
         PaymentsAPI.list({ paymentType: typeFilter || undefined }),
         PaymentsAPI.summary({}).catch(() => ({ data: { data: null } })),
-      ])
+      ]
+      if (canVerify) calls.push(PaymentsAPI.list({ category: 'fleet_reservation', status: 'pending' }).catch(() => ({ data: { data: [] } })))
+      const [res, sm, pend] = await Promise.all(calls)
       setRows(res.data?.data || res.data || [])
       setSummary(sm.data?.data || sm.data || null)
+      if (pend) setPendingFleetPayments(pend.data?.data || [])
     } catch (err) {
       setError(err?.response?.data?.message || 'Could not load payments from the API.')
     } finally {
       setLoading(false)
     }
-  }, [typeFilter])
+  }, [typeFilter, canVerify])
 
   useEffect(() => { load() }, [load])
-  useEffect(() => { VehiclesAPI.list({ limit: 100 }).then(r => setVehicles(r.data?.data || [])).catch(() => {}) }, [])
+
+  const verify = async (payment, approve) => {
+    if (!approve && !confirm('Reject this payment? The client will need to resubmit.')) return
+    try {
+      await PaymentsAPI.verify(payment._id, { approve })
+      load()
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Could not update verification status.')
+    }
+  }
 
   const save = async (e) => {
     e.preventDefault()
@@ -87,7 +102,8 @@ export default function Payments() {
     { key: 'paymentType', header: 'Type', render: (r) => <Badge tone={r.paymentType === 'cash' ? 'accent' : 'steel'}>{r.paymentType}</Badge> },
     { key: 'direction', header: 'Direction', render: (r) => <Badge tone={r.direction === 'received' ? 'positive' : 'negative'}>{r.direction}</Badge> },
     { key: 'category', header: 'Category' },
-    { key: 'vehicle', header: 'Vehicle', render: (r) => r.vehicle?.vehicleNo || '—' },
+    { key: 'status', header: 'Status', render: (r) => <Badge tone={r.status === 'completed' ? 'positive' : r.status === 'pending' ? 'accent' : r.status === 'failed' ? 'negative' : 'default'}>{r.status || 'completed'}</Badge> },
+    { key: 'vehicleNoText', header: 'Vehicle', render: (r) => r.vehicleNoText || r.vehicleId?.vehicleNo || '—' },
     { key: 'amount', header: 'Amount', render: (r) => <Money value={r.direction === 'paid' ? -Math.abs(r.amount || 0) : r.amount} /> },
     ...(canManageCashbook ? [{
       key: 'actions', header: '', render: (r) => (
@@ -98,7 +114,36 @@ export default function Payments() {
 
   return (
     <div>
-      <PageHeader eyebrow="Cash & online book" title="Payment Book" description="Every payment received or paid, linked to trips, vehicles and drivers." />
+      <PageHeader eyebrow={isClient ? 'Your payments' : 'Cash & online book'} title={isClient ? 'Your Fleet Payments' : 'Payment Book'} description={isClient ? 'Payments you\'ve submitted for your fleet reservations and their verification status.' : 'Every payment received or paid, linked to trips, vehicles and drivers.'} />
+
+      {canVerify && pendingFleetPayments.length > 0 && (
+        <div className="card p-5 mb-6 border-accent/30">
+          <h2 className="font-display text-lg mb-1">Fleet payments awaiting verification</h2>
+          <p className="text-sm text-steel mb-4">Clients have submitted these payments against their fleet reservations. Check the evidence, then verify or reject.</p>
+          <div className="space-y-3">
+            {pendingFleetPayments.map((p) => (
+              <div key={p._id} className="flex items-center justify-between gap-4 border border-line rounded px-4 py-3 flex-wrap">
+                <div>
+                  <p className="font-medium">{p.fleet?.name || 'Fleet'} — {p.partyName}</p>
+                  <p className="text-xs text-steel">
+                    <Money value={p.amount} /> · {p.paymentType === 'online' ? 'Online' : 'Cash'}
+                    {p.paymentType === 'cash' ? ` · paid to ${p.paidToName || '—'}` : ''}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {p.paymentType === 'online' && p.receiptUrl && (
+                    <a href={`${SERVER_ROOT_URL}${p.receiptUrl}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-accent-deep">
+                      View screenshot <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+                  <button onClick={() => verify(p, true)} className="inline-flex items-center gap-1.5 text-xs font-semibold text-positive"><ShieldCheck className="w-4 h-4" /> Verify</button>
+                  <button onClick={() => verify(p, false)} className="inline-flex items-center gap-1.5 text-xs font-semibold text-negative"><ShieldX className="w-4 h-4" /> Reject</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -126,11 +171,11 @@ export default function Payments() {
         rows={rows}
         loading={loading}
         error={error}
-        onCreate={() => { setEditing(null); setForm(EMPTY); setReceipt(null); setModalOpen(true) }}
+        onCreate={isClient ? undefined : () => { setEditing(null); setForm(EMPTY); setModalOpen(true) }}
         createLabel="Log payment"
         onRowClick={canManageCashbook ? openEdit : undefined}
         emptyTitle="No payments logged yet"
-        emptyDescription="Log a cash or online payment to start building the book."
+        emptyDescription={isClient ? "Submit a payment from the Fleets page against your reservation." : "Log a cash or online payment to start building the book."}
       />
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit cashbook entry' : 'Log payment'}>
