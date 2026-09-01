@@ -45,6 +45,10 @@ const getDriver = asyncHandler(async (req, res) => {
 
 // @route  POST /api/drivers
 const createDriver = asyncHandler(async (req, res) => {
+  if (!req.body.name || !req.body.phone || !req.body.licenseNumber || !req.body.licenseExpiry) {
+    res.status(400);
+    throw new Error("name, phone, license number and license expiry are required");
+  }
   const payload = { ...req.body, createdBy: req.user._id };
   const driver = await Driver.create(payload);
   res.status(201).json({ success: true, data: driver });

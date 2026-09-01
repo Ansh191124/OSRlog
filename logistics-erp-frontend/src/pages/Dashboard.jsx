@@ -35,7 +35,7 @@ export default function Dashboard() {
       }
     }
     load()
-    const timer = window.setInterval(load, 30000)
+    const timer = window.setInterval(load, 15000)
     return () => { cancelled = true; window.clearInterval(timer) }
   }, [period])
 
@@ -44,7 +44,7 @@ export default function Dashboard() {
       <PageHeader
         eyebrow="Dispatch board"
         title="Overview"
-        description="Live daily fleet, freight, expense and profit updates. Refreshes automatically every 30 seconds."
+        description="Live daily fleet, freight, expense and profit updates. Refreshes automatically every 15 seconds."
         action={
           <div className="flex gap-1 bg-white border border-line rounded p-1">
             {PERIODS.map((p) => (
@@ -70,13 +70,31 @@ export default function Dashboard() {
             <StatCard label="Today's Freight" value={fmt(overview?.today?.freight ?? overview?.todayFreight)} />
             <StatCard label="Today's P/L" value={fmt(overview?.today?.profitLoss ?? overview?.todayProfitLoss)} tone={pl(overview?.today?.profitLoss ?? overview?.todayProfitLoss)} />
             <StatCard label="All-time Profit/Loss" value={fmt(overview?.allTime?.profitLoss ?? overview?.totalProfitLoss)} tone={pl(overview?.allTime?.profitLoss ?? overview?.totalProfitLoss)} />
-            <StatCard label="Active Vehicles" value={overview?.vehicleCounts?.active ?? overview?.activeVehicles ?? '—'} />
+            <StatCard label="Daily Fleet" value={overview?.dailyFleet?.length ?? 0} sub="Trips scheduled today" />
           </div>
 
           <div className="grid md:grid-cols-3 gap-4">
             <StatCard label="Cash Book" value={fmt(overview?.cashOnline?.cash ?? overview?.cashTotal)} sub="Received − paid, cash" />
             <StatCard label="Online Book" value={fmt(overview?.cashOnline?.online ?? overview?.onlineTotal)} sub="Received − paid, online" />
             <StatCard label="Maintenance Pending" value={overview?.maintenanceCounts?.pending ?? overview?.pendingMaintenance ?? '—'} sub="Needs scheduling" />
+          </div>
+
+          <div className="card p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-display text-lg">Today's fleet</h2>
+              <Badge tone="positive">Live</Badge>
+            </div>
+            {overview?.dailyFleet?.length ? (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {overview.dailyFleet.map((trip) => (
+                  <div key={trip._id} className="border border-line rounded p-3">
+                    <p className="font-mono font-semibold text-sm">{trip.vehicle?.vehicleNo || trip.vehicleNoText || 'Vehicle pending'}</p>
+                    <p className="text-sm text-steel mt-1">{trip.driver?.name || trip.driverNameText || 'Driver pending'}</p>
+                    <p className="text-xs text-steel-light mt-2">{trip.tripCode} · {trip.status}</p>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="text-sm text-steel py-5 text-center">No fleet trips have been scheduled for today.</p>}
           </div>
 
           <div className="card p-5">

@@ -18,8 +18,8 @@ router.use(protect, requirePermission("vehicles"));
 router.get("/", getVehicles);
 router.get("/expiring-documents", getExpiringDocuments);
 router.get("/:id", getVehicle);
-router.post("/", createVehicle);
-router.put("/:id", updateVehicle);
+router.post("/", authorize("admin"), createVehicle);
+router.put("/:id", authorize("admin"), updateVehicle);
 router.delete("/:id", authorize("admin"), deleteVehicle);
 
 router.post("/:id/photo", setUploadFolder("vehicles"), upload.single("file"), uploadVehiclePhoto);

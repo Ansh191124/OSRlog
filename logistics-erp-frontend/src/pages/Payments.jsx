@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
-import { PaymentsAPI } from '../lib/api'
+import { PaymentsAPI, VehiclesAPI } from '../lib/api'
 import DataTable from '../components/DataTable'
 import { Modal, PageHeader, Badge, Field, StatCard, Money } from '../components/ui'
 import { Trash2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
-const EMPTY = { paymentType: 'cash', direction: 'received', category: '', amount: '', date: '', vehicleNoText: '', driverNameText: '', notes: '' }
+const EMPTY = { partyName: '', paymentType: 'cash', direction: 'received', category: 'freight', amount: '', date: '', vehicleId: '', notes: '' }
 
 export default function Payments() {
   const { user } = useAuth()
@@ -19,6 +19,8 @@ export default function Payments() {
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
+  const [vehicles, setVehicles] = useState([])
+  const [receipt, setReceipt] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -38,17 +40,26 @@ export default function Payments() {
   }, [typeFilter])
 
   useEffect(() => { load() }, [load])
+  useEffect(() => { VehiclesAPI.list({ limit: 100 }).then(r => setVehicles(r.data?.data || [])).catch(() => {}) }, [])
 
   const save = async (e) => {
     e.preventDefault()
+    if (user?.role === 'client' && !editing && !receipt) return alert('A payment screenshot is required for client entries.')
     setSaving(true)
     try {
       const payload = { ...form, amount: form.amount === '' ? undefined : Number(form.amount) }
       if (editing) await PaymentsAPI.update(editing._id, payload)
-      else await PaymentsAPI.create(payload)
+      else {
+        const created = await PaymentsAPI.create(payload)
+        if (receipt) {
+          const data = new FormData(); data.append('file', receipt)
+          await PaymentsAPI.uploadReceipt((created.data?.data || created.data)._id, data)
+        }
+      }
       setModalOpen(false)
       setEditing(null)
       setForm(EMPTY)
+      setReceipt(null)
       load()
     } catch (err) {
       alert(err?.response?.data?.message || 'Could not save payment.')
@@ -60,9 +71,8 @@ export default function Payments() {
   const openEdit = (row) => {
     setEditing(row)
     setForm({
-      paymentType: row.paymentType || 'cash', direction: row.direction || 'received', category: row.category || '',
-      amount: row.amount ?? '', date: row.date ? String(row.date).slice(0, 10) : '',
-      vehicleNoText: row.vehicleNoText || row.vehicleId?.vehicleNo || '', driverNameText: row.driverNameText || row.driverId?.name || '', notes: row.notes || '',
+      partyName: row.partyName || '', paymentType: row.paymentType || 'cash', direction: row.direction || 'received', category: row.category || 'freight',
+      amount: row.amount ?? '', date: row.date ? String(row.date).slice(0, 10) : '', vehicleId: row.vehicle?._id || '', notes: row.remark || '',
     })
     setModalOpen(true)
   }
@@ -77,7 +87,7 @@ export default function Payments() {
     { key: 'paymentType', header: 'Type', render: (r) => <Badge tone={r.paymentType === 'cash' ? 'accent' : 'steel'}>{r.paymentType}</Badge> },
     { key: 'direction', header: 'Direction', render: (r) => <Badge tone={r.direction === 'received' ? 'positive' : 'negative'}>{r.direction}</Badge> },
     { key: 'category', header: 'Category' },
-    { key: 'vehicleNoText', header: 'Vehicle', render: (r) => r.vehicleNoText || r.vehicleId?.vehicleNo || '—' },
+    { key: 'vehicle', header: 'Vehicle', render: (r) => r.vehicle?.vehicleNo || '—' },
     { key: 'amount', header: 'Amount', render: (r) => <Money value={r.direction === 'paid' ? -Math.abs(r.amount || 0) : r.amount} /> },
     ...(canManageCashbook ? [{
       key: 'actions', header: '', render: (r) => (
@@ -116,7 +126,7 @@ export default function Payments() {
         rows={rows}
         loading={loading}
         error={error}
-        onCreate={() => { setEditing(null); setForm(EMPTY); setModalOpen(true) }}
+        onCreate={() => { setEditing(null); setForm(EMPTY); setReceipt(null); setModalOpen(true) }}
         createLabel="Log payment"
         onRowClick={canManageCashbook ? openEdit : undefined}
         emptyTitle="No payments logged yet"
@@ -125,6 +135,7 @@ export default function Payments() {
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit cashbook entry' : 'Log payment'}>
         <form onSubmit={save} className="space-y-4">
+          <Field label="Party name"><input required className="input-field" value={form.partyName} onChange={(e) => setForm({ ...form, partyName: e.target.value })} /></Field>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Type">
               <select className="input-field" value={form.paymentType} onChange={(e) => setForm({ ...form, paymentType: e.target.value })}>
@@ -139,26 +150,23 @@ export default function Payments() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Amount">
-              <input type="number" step="0.01" className="input-field" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+              <input required min="0.01" type="number" step="0.01" className="input-field" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
             </Field>
             <Field label="Date">
-              <input type="date" className="input-field" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+              <input required type="date" className="input-field" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
             </Field>
           </div>
           <Field label="Category">
-            <input className="input-field" placeholder="Freight advance, salary, fuel…" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+            <select required className="input-field" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}><option value="freight">Freight</option><option value="advance">Advance</option><option value="expense">Expense</option><option value="salary">Salary</option><option value="maintenance">Maintenance</option><option value="fuel">Fuel</option><option value="other">Other</option></select>
           </Field>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Vehicle number">
-              <input className="input-field font-mono" value={form.vehicleNoText} onChange={(e) => setForm({ ...form, vehicleNoText: e.target.value.toUpperCase() })} />
-            </Field>
-            <Field label="Driver name">
-              <input className="input-field" value={form.driverNameText} onChange={(e) => setForm({ ...form, driverNameText: e.target.value })} />
-            </Field>
+            <Field label="Vehicle number"><select className="input-field" value={form.vehicleId} onChange={(e) => setForm({ ...form, vehicleId: e.target.value })}><option value="">No vehicle</option>{vehicles.map(v => <option key={v._id} value={v._id}>{v.vehicleNo}</option>)}</select></Field>
+            <Field label="Payment mode"><select className="input-field" value={form.paymentType} onChange={(e) => setForm({ ...form, paymentType: e.target.value })}><option value="cash">Cash</option><option value="online">Online</option></select></Field>
           </div>
           <Field label="Notes">
             <textarea rows={2} className="input-field" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </Field>
+          {user?.role === 'client' && !editing && <Field label="Payment screenshot"><input required type="file" accept="image/*,.pdf" className="input-field" onChange={(e) => setReceipt(e.target.files?.[0] || null)} /></Field>}
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm rounded border border-line text-steel hover:bg-paper-2">Cancel</button>
             <button type="submit" disabled={saving} className="btn-accent px-4 py-2 text-sm rounded disabled:opacity-60">{saving ? 'Saving…' : editing ? 'Save changes' : 'Log payment'}</button>

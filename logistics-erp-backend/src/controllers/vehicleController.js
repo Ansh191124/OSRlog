@@ -39,6 +39,10 @@ const getVehicle = asyncHandler(async (req, res) => {
 });
 
 const createVehicle = asyncHandler(async (req, res) => {
+  if (!req.body.vehicleNo || !req.body.vehicleType || !req.body.modelName) {
+    res.status(400);
+    throw new Error("vehicle number, type and model are required");
+  }
   const payload = { ...req.body, createdBy: req.user._id };
   const vehicle = await Vehicle.create(payload);
   res.status(201).json({ success: true, data: vehicle });

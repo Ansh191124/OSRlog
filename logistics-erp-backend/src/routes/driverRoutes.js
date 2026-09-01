@@ -16,8 +16,8 @@ router.use(protect, requirePermission("drivers"));
 
 router.get("/", getDrivers);
 router.get("/:id", getDriver);
-router.post("/", createDriver);
-router.put("/:id", updateDriver);
+router.post("/", authorize("admin"), createDriver);
+router.put("/:id", authorize("admin"), updateDriver);
 router.delete("/:id", authorize("admin"), deleteDriver);
 
 router.post(

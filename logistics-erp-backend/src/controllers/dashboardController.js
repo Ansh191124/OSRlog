@@ -123,9 +123,15 @@ const getOverview = asyncHandler(async (req, res) => {
     if (paymentType === "online" && direction === "paid") paymentTotals.onlinePaid = r.total || 0;
   });
 
-  const [totalVehicles, activeVehicles] = await Promise.all([
+  const [totalVehicles, activeVehicles, dailyFleet] = await Promise.all([
     Vehicle.countDocuments(),
     Vehicle.countDocuments({ status: "active" }),
+    Trip.find({ startDate: { $gte: startOfToday, $lt: startOfTomorrow }, status: { $ne: "cancelled" } })
+      .select("tripCode vehicleNoText driverNameText status")
+      .populate("vehicle", "vehicleNo")
+      .populate("driver", "name")
+      .sort({ createdAt: -1 })
+      .lean(),
   ]);
 
   res.json({
@@ -136,6 +142,7 @@ const getOverview = asyncHandler(async (req, res) => {
       maintenanceCounts,
       paymentTotals,
       vehicleCounts: { active: activeVehicles, total: totalVehicles },
+      dailyFleet,
     },
   });
 });

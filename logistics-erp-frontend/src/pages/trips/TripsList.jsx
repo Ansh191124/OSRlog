@@ -91,15 +91,15 @@ export default function TripsList() {
         <form onSubmit={create} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <Field label="Vehicle number">
-              <input className="input-field font-mono" value={form.vehicleNoText} onChange={(e) => setForm({ ...form, vehicleNoText: e.target.value.toUpperCase() })} />
+              <input required className="input-field font-mono" value={form.vehicleNoText} onChange={(e) => setForm({ ...form, vehicleNoText: e.target.value.toUpperCase() })} />
             </Field>
             <Field label="Driver name">
-              <input className="input-field" value={form.driverNameText} onChange={(e) => setForm({ ...form, driverNameText: e.target.value })} />
+              <input required className="input-field" value={form.driverNameText} onChange={(e) => setForm({ ...form, driverNameText: e.target.value })} />
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Start date">
-              <input type="date" className="input-field" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+              <input required type="date" className="input-field" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
             </Field>
             <Field label="End date">
               <input type="date" className="input-field" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />

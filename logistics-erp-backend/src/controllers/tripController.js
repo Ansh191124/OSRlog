@@ -68,6 +68,11 @@ const getTrip = asyncHandler(async (req, res) => {
 const createTrip = asyncHandler(async (req, res) => {
   const { entries = [], expense = {}, summary = {}, vehicleId, driverId, ...tripFields } = req.body;
 
+  if (!(vehicleId || tripFields.vehicle || tripFields.vehicleNoText) || !(driverId || tripFields.driver || tripFields.driverNameText) || !tripFields.startDate) {
+    res.status(400);
+    throw new Error("vehicle, driver and start date are required");
+  }
+
   const tripCode = tripFields.tripCode || (await generateTripCode());
 
   const trip = await Trip.create({

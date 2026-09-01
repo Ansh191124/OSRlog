@@ -61,6 +61,11 @@ const getPayment = asyncHandler(async (req, res) => {
 
 const createPayment = asyncHandler(async (req, res) => {
   const { tripId, vehicleId, driverId, ...body } = req.body;
+  const required = ["partyName", "date", "direction", "category", "paymentType"];
+  if (required.some((field) => !body[field]) || body.amount === undefined || body.amount === "" || Number(body.amount) <= 0) {
+    res.status(400);
+    throw new Error("party name, date, direction, category, payment type and a positive amount are required");
+  }
   const payment = await Payment.create({
     ...body,
     trip: tripId || body.trip || undefined,

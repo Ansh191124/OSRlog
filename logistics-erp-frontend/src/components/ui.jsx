@@ -1,4 +1,4 @@
-import { X, Loader2, Inbox } from 'lucide-react'
+import { X, Loader2, Inbox, PanelTop } from 'lucide-react'
 
 export function Badge({ children, tone = 'steel' }) {
   const tones = {
@@ -90,7 +90,7 @@ export function PageHeader({ eyebrow, title, description, action }) {
     <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
       <div>
         {eyebrow && <p className="text-xs font-semibold uppercase tracking-[0.15em] text-accent-deep mb-1">{eyebrow}</p>}
-        <h1 className="font-display text-3xl text-ink">{title}</h1>
+        <h1 className="font-display text-3xl text-ink flex items-center gap-2"><PanelTop className="w-6 h-6 text-accent" aria-hidden="true" />{title}</h1>
         {description && <p className="text-sm text-steel mt-1 max-w-xl">{description}</p>}
       </div>
       {action}

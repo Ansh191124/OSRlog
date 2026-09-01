@@ -126,9 +126,9 @@ export default function Vehicles() {
         page={page}
         totalPages={totalPages}
         onPage={setPage}
-        onCreate={openCreate}
+        onCreate={isAdmin ? openCreate : undefined}
         createLabel="Add vehicle"
-        onRowClick={openEdit}
+        onRowClick={isAdmin ? openEdit : undefined}
         emptyTitle="No vehicles logged yet"
         emptyDescription="Add your first vehicle to start assigning it to trips."
       />

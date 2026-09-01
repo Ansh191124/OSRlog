@@ -11,6 +11,7 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [serverStatus, setServerStatus] = useState('checking')
+  const [desktopRequired, setDesktopRequired] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -30,8 +31,17 @@ export default function Login() {
     return () => { active = false; window.clearInterval(timer) }
   }, [])
 
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)')
+    const update = () => setDesktopRequired(media.matches)
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+
   const onSubmit = async (e) => {
     e.preventDefault()
+    if (desktopRequired) return
     const result = await login(email, password)
     if (result.ok) navigate(result.forcePasswordChange ? '/change-password' : '/')
   }
@@ -61,6 +71,9 @@ export default function Login() {
           {location.state?.passwordChanged && (
             <div className="text-sm text-positive bg-positive-soft border border-positive/20 rounded px-3 py-2">Password updated. Sign in with your new password.</div>
           )}
+          {desktopRequired && (
+            <div className="text-sm text-accent-deep bg-accent-soft border border-accent/20 rounded px-3 py-2">Please open OSR Logistics on a desktop or laptop to sign in.</div>
+          )}
 
           <div>
             <span className="label-field">Email</span>
@@ -87,7 +100,7 @@ export default function Login() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || desktopRequired}
             className="btn-accent w-full rounded py-2.5 flex items-center justify-center gap-2 disabled:opacity-60"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}

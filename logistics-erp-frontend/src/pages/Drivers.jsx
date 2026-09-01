@@ -107,9 +107,9 @@ export default function Drivers() {
         page={page}
         totalPages={totalPages}
         onPage={setPage}
-        onCreate={openCreate}
+        onCreate={isAdmin ? openCreate : undefined}
         createLabel="Add driver"
-        onRowClick={openEdit}
+        onRowClick={isAdmin ? openEdit : undefined}
         emptyTitle="No drivers logged yet"
         emptyDescription="Add your first driver to start assigning trips and tracking license expiry."
       />
@@ -121,7 +121,7 @@ export default function Drivers() {
           </Field>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Phone">
-              <input className="input-field" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            <input required className="input-field" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             </Field>
             <Field label="Status">
               <select className="input-field" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
@@ -134,10 +134,10 @@ export default function Drivers() {
           <div className="grid grid-cols-2 gap-4"><Field label="Driver type"><select className="input-field" value={form.driverType} onChange={e => setForm({ ...form, driverType: e.target.value })}><option value="permanent">Permanent</option><option value="temporary">Temporary</option></select></Field><Field label="Temporary until"><input disabled={form.driverType !== 'temporary'} type="date" className="input-field disabled:opacity-50" value={form.temporaryUntil} onChange={e => setForm({ ...form, temporaryUntil: e.target.value })} /></Field></div>
           <div className="grid grid-cols-2 gap-4">
             <Field label="License number">
-              <input className="input-field" value={form.licenseNumber} onChange={(e) => setForm({ ...form, licenseNumber: e.target.value })} />
+              <input required className="input-field" value={form.licenseNumber} onChange={(e) => setForm({ ...form, licenseNumber: e.target.value })} />
             </Field>
             <Field label="License expiry">
-              <input type="date" className="input-field" value={form.licenseExpiry} onChange={(e) => setForm({ ...form, licenseExpiry: e.target.value })} />
+              <input required type="date" className="input-field" value={form.licenseExpiry} onChange={(e) => setForm({ ...form, licenseExpiry: e.target.value })} />
             </Field>
           </div>
           <Field label="Address">
