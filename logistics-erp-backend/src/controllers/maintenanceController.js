@@ -37,7 +37,15 @@ const getMaintenance = asyncHandler(async (req, res) => {
 });
 
 const createMaintenance = asyncHandler(async (req, res) => {
-  const { vehicleId, inventoryUses = [], serviceType, dueDate, odometerDue, notes, ...body } = req.body;
+  const { vehicleId, inventoryUses = [], serviceType, dueDate, odometerDue, notes, vehicleNoText, ...body } = req.body;
+  if (!vehicleNoText && !vehicleId && !body.vehicle) {
+    res.status(400);
+    throw new Error("vehicle number is required");
+  }
+  if (!serviceType && !body.maintenanceType) {
+    res.status(400);
+    throw new Error("service type is required");
+  }
   if (!Array.isArray(inventoryUses)) {
     res.status(400);
     throw new Error("inventoryUses must be a list of inventory items");
@@ -55,6 +63,7 @@ const createMaintenance = asyncHandler(async (req, res) => {
   }
   const record = await Maintenance.create({
     ...body,
+    vehicleNoText: vehicleNoText || body.vehicleNoText || undefined,
     vehicle: vehicleId || body.vehicle || undefined,
     maintenanceType: serviceType || body.maintenanceType,
     scheduledDate: dueDate || body.scheduledDate,

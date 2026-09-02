@@ -97,6 +97,17 @@ const tripSummarySchema = new Schema(
  * vehicleNoText/driverNameText store the manually typed value exactly like
  * the paper sheet, in case staff types a vehicle/driver not yet in the master list.
  */
+const driverChangeSchema = new Schema(
+  {
+    driver: { type: Schema.Types.ObjectId, ref: "Driver" },
+    driverNameText: { type: String },
+    effectiveAt: { type: Date },
+    reason: { type: String },
+    recordedBy: { type: Schema.Types.ObjectId, ref: "User" },
+  },
+  { timestamps: true, _id: true }
+);
+
 const tripSchema = new Schema(
   {
     tripCode: { type: String, unique: true, sparse: true }, // e.g. TRIP-000123
@@ -106,6 +117,8 @@ const tripSchema = new Schema(
 
     driver: { type: Schema.Types.ObjectId, ref: "Driver" },
     driverNameText: { type: String },
+
+    driverChanges: [driverChangeSchema],
 
     startDate: { type: Date },
     endDate: { type: Date },

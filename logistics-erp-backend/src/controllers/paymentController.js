@@ -96,6 +96,11 @@ const createPayment = asyncHandler(async (req, res) => {
       partyName: payload.partyName || fleet.clientName,
       date: payload.date || new Date(),
     };
+  } else {
+    if (!body.partyName?.trim()) { res.status(400); throw new Error("party name is required"); }
+    if (!body.amount || Number(body.amount) <= 0) { res.status(400); throw new Error("Enter a valid payment amount"); }
+    if (!body.date) { res.status(400); throw new Error("payment date is required"); }
+    if (!body.category) { res.status(400); throw new Error("payment category is required"); }
   }
 
   const payment = await Payment.create({

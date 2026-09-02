@@ -55,15 +55,23 @@ export default function Fleets() {
     PaymentsAPI.list({ category: 'fleet_reservation' }).then((r) => setMyPayments(r.data?.data || [])).catch(() => {})
   }, [isClient, rows.length])
 
-  const paymentForFleet = (fleetId) => myPayments.filter((p) => (p.fleet?._id || p.fleet) === fleetId).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]
+  const paymentForFleet = (fleetId) => myPayments.filter((p) => String(p.fleet?._id || p.fleet) === String(fleetId)).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]
 
-  const openCreate = () => { setForm(EMPTY); setFormError(''); setOpen(true) }
+  const openCreate = () => { setForm(isClient ? clientFormDefaults(user) : EMPTY); setFormError(''); setOpen(true) }
 
   const save = async (e) => {
     e.preventDefault()
     setFormError('')
     try {
-      const res = await FleetsAPI.create(form)
+      const payload = isClient
+        ? {
+            reservedVehicleCount: form.reservedVehicleCount,
+            reservationStartDate: form.reservationStartDate || undefined,
+            reservationEndDate: form.reservationEndDate || undefined,
+            notes: form.notes || undefined,
+          }
+        : form
+      const res = await FleetsAPI.create(payload)
       setOpen(false); setForm(EMPTY); load()
       if (isClient && res.data?.data?._id) openPayment(res.data.data)
     } catch (err) {
@@ -201,34 +209,50 @@ export default function Fleets() {
       <Modal open={open} onClose={() => { setOpen(false); setFormError('') }} title={isClient ? 'Reserve fleet for future use' : 'Create client fleet'}>
         <form onSubmit={save} className="space-y-4">
           {formError && <div className="text-sm text-negative bg-negative-soft border border-negative/20 rounded px-3 py-2">{formError}</div>}
-          <Field label="Fleet name"><input required className="input-field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-          <Field label="Client name"><input required className="input-field" value={form.clientName} onChange={(e) => setForm({ ...form, clientName: e.target.value })} /></Field>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Contact"><input className="input-field" value={form.contactName} onChange={(e) => setForm({ ...form, contactName: e.target.value })} /></Field>
-            <Field label="Phone"><input className="input-field" value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} /></Field>
-          </div>
 
           {isClient ? (
             <>
+              <div className="rounded border border-line bg-paper-2/60 px-4 py-3 text-sm">
+                <p className="font-medium text-ink">Booking as</p>
+                <p className="text-steel mt-1">{user?.name || '—'}</p>
+                <p className="text-steel">{user?.email || '—'}</p>
+                {user?.phone && <p className="text-steel">{user.phone}</p>}
+                <p className="text-xs text-steel mt-2">Your name and contact details are taken from your account automatically.</p>
+              </div>
               <Field label="How many vehicles do you need?">
                 <input required type="number" min="1" className="input-field" value={form.reservedVehicleCount} onChange={(e) => setForm({ ...form, reservedVehicleCount: e.target.value })} />
               </Field>
-              <p className="text-xs text-steel">We'll auto-assign the next available serial block for you (e.g. FL-1004 to FL-1050) and send it to the admin for approval.</p>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Reserve for use from"><input type="date" className="input-field" value={form.reservationStartDate} onChange={(e) => setForm({ ...form, reservationStartDate: e.target.value })} /></Field>
+                <Field label="Reserve for use until"><input type="date" className="input-field" value={form.reservationEndDate} onChange={(e) => setForm({ ...form, reservationEndDate: e.target.value })} /></Field>
+              </div>
+              <Field label="Notes (optional)">
+                <textarea rows={2} className="input-field" value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Any special instructions for this reservation…" />
+              </Field>
+              <p className="text-xs text-steel">We'll auto-assign the next available serial block and send it to the admin for approval. After submitting, you'll enter your payment details.</p>
             </>
           ) : (
-            <div className="grid grid-cols-3 gap-4">
-              <Field label="Reserve from (e.g. FL1024)"><input className="input-field font-mono" value={form.fleetCodeFrom} onChange={(e) => setForm({ ...form, fleetCodeFrom: e.target.value.toUpperCase() })} /></Field>
-              <Field label="Reserve to (e.g. FL1060)"><input className="input-field font-mono" value={form.fleetCodeTo} onChange={(e) => setForm({ ...form, fleetCodeTo: e.target.value.toUpperCase() })} /></Field>
-              <Field label="Vehicle count"><input type="number" min="0" className="input-field" value={form.reservedVehicleCount} onChange={(e) => setForm({ ...form, reservedVehicleCount: e.target.value })} /></Field>
-            </div>
+            <>
+              <Field label="Fleet name"><input required className="input-field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+              <Field label="Client name"><input required className="input-field" value={form.clientName} onChange={(e) => setForm({ ...form, clientName: e.target.value })} /></Field>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Contact"><input className="input-field" value={form.contactName} onChange={(e) => setForm({ ...form, contactName: e.target.value })} /></Field>
+                <Field label="Phone"><input className="input-field" value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} /></Field>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <Field label="Reserve from (e.g. FL1024)"><input className="input-field font-mono" value={form.fleetCodeFrom} onChange={(e) => setForm({ ...form, fleetCodeFrom: e.target.value.toUpperCase() })} /></Field>
+                <Field label="Reserve to (e.g. FL1060)"><input className="input-field font-mono" value={form.fleetCodeTo} onChange={(e) => setForm({ ...form, fleetCodeTo: e.target.value.toUpperCase() })} /></Field>
+                <Field label="Vehicle count"><input type="number" min="0" className="input-field" value={form.reservedVehicleCount} onChange={(e) => setForm({ ...form, reservedVehicleCount: e.target.value })} /></Field>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Reserve for use from"><input type="date" className="input-field" value={form.reservationStartDate} onChange={(e) => setForm({ ...form, reservationStartDate: e.target.value })} /></Field>
+                <Field label="Reserve for use until"><input type="date" className="input-field" value={form.reservationEndDate} onChange={(e) => setForm({ ...form, reservationEndDate: e.target.value })} /></Field>
+              </div>
+              <p className="text-xs text-steel">Set a future date range to reserve this fleet ahead of time. A vehicle range can be re-reserved by another client once your reservation period ends — overlapping ranges and dates are rejected automatically.</p>
+            </>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Reserve for use from"><input type="date" className="input-field" value={form.reservationStartDate} onChange={(e) => setForm({ ...form, reservationStartDate: e.target.value })} /></Field>
-            <Field label="Reserve for use until"><input type="date" className="input-field" value={form.reservationEndDate} onChange={(e) => setForm({ ...form, reservationEndDate: e.target.value })} /></Field>
-          </div>
-          <p className="text-xs text-steel">Set a future date range to reserve this fleet ahead of time. A vehicle range can be re-reserved by another client once your reservation period ends — overlapping ranges and dates are rejected automatically.</p>
-          <button className="btn-accent px-4 py-2 rounded">{isClient ? 'Send for approval' : 'Create'}</button>
+          <button className="btn-accent px-4 py-2 rounded">{isClient ? 'Send for approval & pay' : 'Create'}</button>
         </form>
       </Modal>
 
@@ -295,4 +319,14 @@ export default function Fleets() {
       </Modal>
     </div>
   )
+}
+
+function clientFormDefaults(user) {
+  return {
+    ...EMPTY,
+    clientName: user?.name || '',
+    contactName: user?.name || '',
+    contactPhone: user?.phone || '',
+    notes: '',
+  }
 }

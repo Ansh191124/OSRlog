@@ -131,10 +131,10 @@ export default function Maintenance() {
         <form onSubmit={save} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <Field label="Vehicle number">
-              <input className="input-field font-mono" value={form.vehicleNoText} onChange={(e) => setForm({ ...form, vehicleNoText: e.target.value.toUpperCase() })} />
+              <input required className="input-field font-mono" value={form.vehicleNoText} onChange={(e) => setForm({ ...form, vehicleNoText: e.target.value.toUpperCase() })} />
             </Field>
             <Field label="Service type">
-              <select className="input-field" value={form.serviceType} onChange={(e) => setForm({ ...form, serviceType: e.target.value, inventoryItemId: '', inventoryQuantity: '' })}>
+              <select required className="input-field" value={form.serviceType} onChange={(e) => setForm({ ...form, serviceType: e.target.value, inventoryItemId: '', inventoryQuantity: '' })}>
                 <option value="">Select service</option><option value="tyre">Tyre replacement</option><option value="urea">Urea refill</option><option value="diesel">Diesel refill</option><option value="custom">Other service</option>
               </select>
             </Field>

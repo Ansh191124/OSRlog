@@ -47,8 +47,10 @@ const getSummary = asyncHandler(async (req, res) => {
         _id: 0,
         period: "$_id",
         totalFreight: 1,
+        freight: "$totalFreight",
         totalExpenses: 1,
         netProfitLoss: 1,
+        profitLoss: "$netProfitLoss",
         tripCount: 1,
       },
     },
@@ -123,12 +125,10 @@ const getOverview = asyncHandler(async (req, res) => {
     if (paymentType === "online" && direction === "paid") paymentTotals.onlinePaid = r.total || 0;
   });
 
-  const [totalVehicles, activeVehicles, dailyFleet] = await Promise.all([
+  const [totalVehicles, activeVehicles, todayTrips, totalFleets, reservedFleets, runningFleets, todayFleets] = await Promise.all([
     Vehicle.countDocuments(),
     Vehicle.countDocuments({ status: "active" }),
-  ]);
-
-  const [totalFleets, reservedFleets, runningFleets, todayFleets] = await Promise.all([
+    Trip.countDocuments({ startDate: { $gte: startOfToday, $lt: startOfTomorrow } }),
     Fleet.countDocuments(),
     Fleet.countDocuments({ reservationStatus: { $in: ["reserved", "approved"] } }),
     Fleet.countDocuments({ status: "active" }),
@@ -140,15 +140,31 @@ const getOverview = asyncHandler(async (req, res) => {
     }),
   ]);
 
+  const today = todayAgg || { todayFreight: 0, todayExpenses: 0, todayProfitLoss: 0, todayTrips: 0 };
+  const allTime = allTimeAgg || { totalFreight: 0, totalExpenses: 0, totalProfitLoss: 0, totalTrips: 0 };
+
   res.json({
     success: true,
     data: {
-      today: todayAgg || { todayFreight: 0, todayExpenses: 0, todayProfitLoss: 0, todayTrips: 0 },
-      allTime: allTimeAgg || { totalFreight: 0, totalExpenses: 0, totalProfitLoss: 0, totalTrips: 0 },
+      today: {
+        ...today,
+        freight: today.todayFreight,
+        profitLoss: today.todayProfitLoss,
+        trips: todayTrips,
+      },
+      allTime: {
+        ...allTime,
+        profitLoss: allTime.totalProfitLoss,
+      },
       maintenanceCounts,
       paymentTotals,
+      cashOnline: {
+        cash: (paymentTotals.cashReceived || 0) - (paymentTotals.cashPaid || 0),
+        online: (paymentTotals.onlineReceived || 0) - (paymentTotals.onlinePaid || 0),
+      },
       vehicleCounts: { active: activeVehicles, total: totalVehicles },
       fleetCounts: { total: totalFleets, reserved: reservedFleets, running: runningFleets, today: todayFleets },
+      todayTrips,
     },
   });
 });
@@ -184,6 +200,7 @@ const getVehiclePerformance = asyncHandler(async (req, res) => {
         totalFreight: { $sum: "$trips.summary.freightTotal" },
         totalExpenses: { $sum: "$trips.summary.expensesTotal" },
         netProfitLoss: { $sum: "$trips.summary.profitLoss" },
+        profitLoss: { $sum: "$trips.summary.profitLoss" },
       },
     },
     { $sort: { netProfitLoss: -1 } },

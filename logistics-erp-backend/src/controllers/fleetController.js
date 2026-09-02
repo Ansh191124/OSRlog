@@ -84,25 +84,31 @@ const getFleets = asyncHandler(async (req, res) => {
   res.json({ success: true, data: rows });
 });
 const createFleet = asyncHandler(async (req, res) => {
-  const { name, clientName, contactName, contactPhone, notes, reservedVehicleCount, reservationStartDate, reservationEndDate } = req.body;
-  if (!name || !clientName) { res.status(400); throw new Error("fleet name and client name are required"); }
-
+  let { name, clientName, contactName, contactPhone, notes, reservedVehicleCount, reservationStartDate, reservationEndDate } = req.body;
   let { fleetCodeFrom, fleetCodeTo } = req.body;
 
   if (req.user.role === "client") {
-    // Clients only tell us how many vehicles they need; the serial range is
-    // auto-assigned from the shared pool, next-available-first.
+    // Client identity always comes from the logged-in account — never from the form.
+    clientName = req.user.name;
+    contactName = req.user.name;
+    contactPhone = req.user.phone || contactPhone;
     const count = Number(reservedVehicleCount || 0);
     if (count < 1) { res.status(400); throw new Error("Enter how many vehicles you'd like to reserve"); }
+    if (!name?.trim()) {
+      name = `${req.user.name} — ${count} vehicle${count === 1 ? "" : "s"}`;
+    }
     const allocated = await allocateNextFleetRange(count);
     if (!allocated) { res.status(409); throw new Error("No contiguous block of that size is available in the fleet pool right now"); }
     fleetCodeFrom = allocated.from;
     fleetCodeTo = allocated.to;
-  } else if (fleetCodeFrom && fleetCodeTo) {
-    const clash = await findOverlappingFleet(fleetCodeFrom, fleetCodeTo, null, reservationStartDate, reservationEndDate);
-    if (clash) {
-      res.status(409);
-      throw new Error(`Vehicle range ${fleetCodeFrom}-${fleetCodeTo} overlaps an existing reservation (${clash.fleetCodeFrom}-${clash.fleetCodeTo}) for ${clash.clientName}`);
+  } else {
+    if (!name || !clientName) { res.status(400); throw new Error("fleet name and client name are required"); }
+    if (fleetCodeFrom && fleetCodeTo) {
+      const clash = await findOverlappingFleet(fleetCodeFrom, fleetCodeTo, null, reservationStartDate, reservationEndDate);
+      if (clash) {
+        res.status(409);
+        throw new Error(`Vehicle range ${fleetCodeFrom}-${fleetCodeTo} overlaps an existing reservation (${clash.fleetCodeFrom}-${clash.fleetCodeTo}) for ${clash.clientName}`);
+      }
     }
   }
 

@@ -49,6 +49,10 @@ const createDriver = asyncHandler(async (req, res) => {
     res.status(400);
     throw new Error("name, phone, license number and license expiry are required");
   }
+  if (req.body.driverType === "temporary" && !req.body.temporaryUntil) {
+    res.status(400);
+    throw new Error("temporary until date is required for temporary drivers");
+  }
   const payload = { ...req.body, createdBy: req.user._id };
   const driver = await Driver.create(payload);
   res.status(201).json({ success: true, data: driver });
@@ -56,6 +60,10 @@ const createDriver = asyncHandler(async (req, res) => {
 
 // @route  PUT /api/drivers/:id
 const updateDriver = asyncHandler(async (req, res) => {
+  if (req.body.driverType === "temporary" && !req.body.temporaryUntil) {
+    res.status(400);
+    throw new Error("temporary until date is required for temporary drivers");
+  }
   const driver = await Driver.findByIdAndUpdate(req.params.id, req.body, {
     new: true,
     runValidators: true,

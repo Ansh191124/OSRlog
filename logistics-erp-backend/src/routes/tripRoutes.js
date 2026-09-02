@@ -12,6 +12,7 @@ const {
   upsertTripExpense,
   upsertTripSummary,
   calculateTripSummary,
+  addDriverChange,
 } = require("../controllers/tripController");
 const { protect, authorize, requirePermission } = require("../middlewares/auth");
 
@@ -31,5 +32,6 @@ router.put("/:id/expense", upsertTripExpense);
 router.put("/:id/summary", upsertTripSummary);
 
 router.post("/:id/calculate", calculateTripSummary);
+router.post("/:id/driver-changes", addDriverChange);
 
 module.exports = router;

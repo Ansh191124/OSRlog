@@ -149,7 +149,7 @@ function AdminDashboard() {
             <StatCard label="Today's Freight" value={fmt(overview?.today?.freight ?? overview?.todayFreight)} />
             <StatCard label="Today's P/L" value={fmt(overview?.today?.profitLoss ?? overview?.todayProfitLoss)} tone={pl(overview?.today?.profitLoss ?? overview?.todayProfitLoss)} />
             <StatCard label="All-time Profit/Loss" value={fmt(overview?.allTime?.profitLoss ?? overview?.totalProfitLoss)} tone={pl(overview?.allTime?.profitLoss ?? overview?.totalProfitLoss)} />
-            <StatCard label="Daily Fleet" value={overview?.dailyFleet?.length ?? 0} sub="Trips scheduled today" />
+            <StatCard label="Daily Fleet" value={overview?.today?.trips ?? overview?.todayTrips ?? 0} sub="Trips scheduled today" />
           </div>
 
           <div className="grid md:grid-cols-3 gap-4">
@@ -218,13 +218,13 @@ function pl(v) {
 function normalizeTrend(trend) {
   return trend.map((t) => ({
     label: t.period || t.label || t._id || t.date,
-    freight: t.freightTotal ?? t.freight ?? 0,
-    profitLoss: t.profitLoss ?? t.pl ?? 0,
+    freight: t.totalFreight ?? t.freightTotal ?? t.freight ?? 0,
+    profitLoss: t.netProfitLoss ?? t.profitLoss ?? t.pl ?? 0,
   }))
 }
 function normalizeVehiclePerf(vp) {
   return vp.map((v) => ({
     label: v.vehicleNo || v.vehicleNoText || v.label || 'Vehicle',
-    profitLoss: v.profitLoss ?? v.pl ?? 0,
+    profitLoss: v.netProfitLoss ?? v.profitLoss ?? v.pl ?? 0,
   }))
 }

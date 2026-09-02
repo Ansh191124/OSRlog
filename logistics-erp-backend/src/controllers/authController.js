@@ -45,6 +45,7 @@ const register = asyncHandler(async (req, res) => {
       id: user._id,
       name: user.name,
       email: user.email,
+      phone: user.phone,
       role: user.role,
       permissions: await getPermissions(user.role),
       forcePasswordChange: user.forcePasswordChange !== false,
@@ -79,6 +80,7 @@ const login = asyncHandler(async (req, res) => {
       id: user._id,
       name: user.name,
       email: user.email,
+      phone: user.phone,
       role: user.role,
       permissions: await getPermissions(user.role),
       forcePasswordChange: user.forcePasswordChange !== false,
@@ -89,7 +91,18 @@ const login = asyncHandler(async (req, res) => {
 
 // @route  GET /api/auth/me
 const me = asyncHandler(async (req, res) => {
-  res.json({ success: true, data: req.user });
+  res.json({
+    success: true,
+    data: {
+      id: req.user._id,
+      name: req.user.name,
+      email: req.user.email,
+      phone: req.user.phone,
+      role: req.user.role,
+      permissions: req.user.permissions,
+      forcePasswordChange: req.user.forcePasswordChange !== false,
+    },
+  });
 });
 
 const changePassword = asyncHandler(async (req, res) => {

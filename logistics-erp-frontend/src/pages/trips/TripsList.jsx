@@ -60,8 +60,8 @@ export default function TripsList() {
   }
 
   const columns = [
-    { key: 'vehicleNoText', header: 'Vehicle', render: (r) => <span className="font-mono font-semibold tabular">{r.vehicleNoText || r.vehicleId?.vehicleNo || '—'}</span> },
-    { key: 'driverNameText', header: 'Driver', render: (r) => r.driverNameText || r.driverId?.name || '—' },
+    { key: 'vehicleNoText', header: 'Vehicle', render: (r) => <span className="font-mono font-semibold tabular">{r.vehicleNoText || r.vehicle?.vehicleNo || '—'}</span> },
+    { key: 'driverNameText', header: 'Driver', render: (r) => r.driverNameText || r.driver?.name || '—' },
     { key: 'startDate', header: 'Start', render: (r) => sliceDate(r.startDate) },
     { key: 'endDate', header: 'End', render: (r) => sliceDate(r.endDate) },
     { key: 'freightTotal', header: 'Freight', render: (r) => r.summary?.freightTotal !== undefined ? <span className="tabular">₹{Number(r.summary.freightTotal).toLocaleString('en-IN')}</span> : '—' },

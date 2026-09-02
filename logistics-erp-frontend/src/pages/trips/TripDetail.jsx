@@ -4,6 +4,8 @@ import { DriversAPI, TripsAPI } from '../../lib/api'
 import { LoadState, ErrorState, Badge, Money } from '../../components/ui'
 import { ArrowLeft, Plus, Trash2, Sparkles, Pencil, Check, X, UserRoundCog } from 'lucide-react'
 
+const REQUIRED_ENTRY_KEYS = new Set(['date', 'partyName', 'fromLocation', 'toLocation'])
+
 const ENTRY_FIELDS = [
   { key: 'date', label: 'Date', type: 'date' },
   { key: 'partyName', label: 'Party' },
@@ -85,6 +87,11 @@ export default function TripDetail() {
 
   const addEntry = async (e) => {
     e.preventDefault()
+    const missing = ['date', 'partyName', 'fromLocation', 'toLocation'].filter((k) => !newEntry[k]?.trim?.() && !newEntry[k])
+    if (missing.length) {
+      alert('Date, party, from and to are required for each leg.')
+      return
+    }
     setAddingEntry(true)
     try {
       const payload = numify(newEntry)
@@ -109,6 +116,11 @@ export default function TripDetail() {
   }
 
   const saveEditEntry = async (entryId) => {
+    const missing = ['date', 'partyName', 'fromLocation', 'toLocation'].filter((k) => !editEntry[k]?.trim?.() && !editEntry[k])
+    if (missing.length) {
+      alert('Date, party, from and to are required for each leg.')
+      return
+    }
     try {
       await TripsAPI.updateEntry(id, entryId, numify(editEntry))
       setEditingEntryId(null)
@@ -181,7 +193,7 @@ export default function TripDetail() {
         <div className="pl-3 flex flex-wrap justify-between gap-6">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.15em] text-accent-deep mb-1">Trip Sheet</p>
-            <h1 className="font-mono text-3xl font-bold tabular">{trip.vehicleNoText || trip.vehicleId?.vehicleNo || '—'}</h1>
+            <h1 className="font-mono text-3xl font-bold tabular">{trip.vehicleNoText || trip.vehicle?.vehicleNo || '—'}</h1>
             <p className="text-sm text-steel mt-1">Driver: {currentDriver(trip)}</p>
           </div>
           <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm">
@@ -199,7 +211,7 @@ export default function TripDetail() {
           <div><span className="label-field">Reason / note</span><input className="input-field" placeholder="Shift change, leave…" value={handover.reason} onChange={(e) => setHandover({ ...handover, reason: e.target.value })} /></div>
           <button disabled={savingHandover} className="btn-accent rounded px-4 py-2 text-sm disabled:opacity-60 flex items-center gap-1.5"><UserRoundCog className="w-4 h-4" />{savingHandover ? 'Saving…' : 'Record change'}</button>
         </form>
-        {(trip.driverChanges || []).length > 0 && <div className="mt-4 border-t border-line pt-3 space-y-2 text-sm">{trip.driverChanges.map((change, index) => <div key={change._id || index} className="flex flex-wrap gap-x-3 text-steel"><span className="font-medium text-ink">{change.driverNameText || change.driverId?.name || 'Driver'}</span><span>{formatDateTime(change.effectiveAt)}</span>{change.reason && <span>— {change.reason}</span>}</div>)}</div>}
+        {(trip.driverChanges || []).length > 0 && <div className="mt-4 border-t border-line pt-3 space-y-2 text-sm">{trip.driverChanges.map((change, index) => <div key={change._id || index} className="flex flex-wrap gap-x-3 text-steel"><span className="font-medium text-ink">{change.driverNameText || change.driver?.name || 'Driver'}</span><span>{formatDateTime(change.effectiveAt)}</span>{change.reason && <span>— {change.reason}</span>}</div>)}</div>}
       </Section>
 
       {/* Entries / legs */}
@@ -221,6 +233,7 @@ export default function TripDetail() {
                         <td key={f.key} className="py-1.5 pr-3">
                           <input
                             type={f.type || 'text'}
+                            required={REQUIRED_ENTRY_KEYS.has(f.key)}
                             className="input-field py-1 text-xs"
                             value={editEntry[f.key]}
                             onChange={(e) => setEditEntry({ ...editEntry, [f.key]: e.target.value })}
@@ -264,6 +277,7 @@ export default function TripDetail() {
               <span className="label-field">{f.label}</span>
               <input
                 type={f.type || 'text'}
+                required={REQUIRED_ENTRY_KEYS.has(f.key)}
                 step={f.type === 'number' ? '0.01' : undefined}
                 className="input-field"
                 value={newEntry[f.key]}
@@ -358,7 +372,7 @@ function formatDateTime(d) { return d ? new Date(d).toLocaleString('en-IN') : 'T
 function currentDriver(trip) {
   const changes = trip.driverChanges || []
   const latest = changes.length ? [...changes].sort((a, b) => new Date(b.effectiveAt) - new Date(a.effectiveAt))[0] : null
-  return latest?.driverNameText || latest?.driverId?.name || trip.driverNameText || trip.driverId?.name || '—'
+  return latest?.driverNameText || latest?.driver?.name || trip.driverNameText || trip.driver?.name || '—'
 }
 const TEXT_KEYS = new Set(['date', 'partyName', 'fromLocation', 'toLocation'])
 function numify(obj) {

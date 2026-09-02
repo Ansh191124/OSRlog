@@ -17,14 +17,29 @@ export const ROLE_ACCESS = {
 }
 
 export function canAccess(user, area) {
-  if (user?.permissions) return user.permissions.includes('*') || user.permissions.includes(area)
+  const perms = user?.permissions
+  if (Array.isArray(perms) && perms.length > 0) {
+    return perms.includes('*') || perms.includes(area)
+  }
   return Boolean(user?.role && ROLE_ACCESS[user.role]?.includes(area))
 }
 
+const ROUTE_PRIORITY = [
+  ['dashboard', '/'],
+  ['fleets', '/fleets'],
+  ['trips', '/trips'],
+  ['payments', '/payments'],
+  ['approvals', '/approvals'],
+  ['drivers', '/drivers'],
+  ['vehicles', '/vehicles'],
+  ['maintenance', '/maintenance'],
+  ['inventory', '/inventory'],
+  ['users', '/users'],
+]
+
 export function defaultRouteFor(user) {
-  if (canAccess(user, 'dashboard')) return '/'
-  if (canAccess(user, 'drivers')) return '/drivers'
-  if (canAccess(user, 'trips')) return '/trips'
-  if (canAccess(user, 'payments')) return '/payments'
+  for (const [area, path] of ROUTE_PRIORITY) {
+    if (canAccess(user, area)) return path
+  }
   return '/login'
 }

@@ -133,10 +133,10 @@ export default function Drivers() {
               </select>
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-4"><Field label="Driver type"><select className="input-field" value={form.driverType} onChange={e => setForm({ ...form, driverType: e.target.value })}><option value="permanent">Permanent</option><option value="temporary">Temporary</option></select></Field><Field label="Temporary until"><input disabled={form.driverType !== 'temporary'} type="date" className="input-field disabled:opacity-50" value={form.temporaryUntil} onChange={e => setForm({ ...form, temporaryUntil: e.target.value })} /></Field></div>
+          <div className="grid grid-cols-2 gap-4"><Field label="Driver type"><select className="input-field" value={form.driverType} onChange={e => setForm({ ...form, driverType: e.target.value })}><option value="permanent">Permanent</option><option value="temporary">Temporary</option></select></Field><Field label="Temporary until"><input required={form.driverType === 'temporary'} disabled={form.driverType !== 'temporary'} type="date" className="input-field disabled:opacity-50" value={form.temporaryUntil} onChange={e => setForm({ ...form, temporaryUntil: e.target.value })} /></Field></div>
           <div className="grid grid-cols-2 gap-4">
             <Field label={<span className="inline-flex items-center gap-1.5">License number {editing && <MandatoryLockIcon locked={!mandatoryUnlocked} />}</span>}>
-              <input disabled={Boolean(editing) && !mandatoryUnlocked} className="input-field disabled:opacity-60 disabled:bg-paper-2" value={form.licenseNumber} onChange={(e) => setForm({ ...form, licenseNumber: e.target.value })} />
+              <input required={!editing} disabled={Boolean(editing) && !mandatoryUnlocked} className="input-field disabled:opacity-60 disabled:bg-paper-2" value={form.licenseNumber} onChange={(e) => setForm({ ...form, licenseNumber: e.target.value })} />
             </Field>
             <Field label="License expiry">
               <input required type="date" className="input-field" value={form.licenseExpiry} onChange={(e) => setForm({ ...form, licenseExpiry: e.target.value })} />

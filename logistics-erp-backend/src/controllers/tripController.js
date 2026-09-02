@@ -1,12 +1,25 @@
 const asyncHandler = require("express-async-handler");
-const { Trip } = require("../models");
+const { Trip, Driver } = require("../models");
 const { suggestTripSummary } = require("../utils/calculations");
 const { getPagination, paginationMeta, endOfDay } = require("../utils/api");
+
+const REQUIRED_ENTRY_FIELDS = ["date", "partyName", "fromLocation", "toLocation"];
+
+const validateTripEntry = (body) => {
+  for (const field of REQUIRED_ENTRY_FIELDS) {
+    if (!body[field]) {
+      return `${field.replace(/([A-Z])/g, " $1").toLowerCase()} is required`;
+    }
+  }
+  return null;
+};
 
 const populateTrip = (query) =>
   query
     .populate("vehicle", "vehicleNo vehicleType")
-    .populate("driver", "name phone");
+    .populate("driver", "name phone")
+    .populate("driverChanges.driver", "name phone")
+    .populate("driverChanges.recordedBy", "name");
 
 // Auto-generate a human friendly trip code TRIP-000001
 const generateTripCode = async () => {
@@ -130,6 +143,11 @@ const deleteTrip = asyncHandler(async (req, res) => {
 // ---------------- Trip Entries (rows, embedded array) ----------------
 
 const addTripEntry = asyncHandler(async (req, res) => {
+  const entryError = validateTripEntry(req.body);
+  if (entryError) {
+    res.status(400);
+    throw new Error(entryError);
+  }
   const trip = await Trip.findById(req.params.id);
   if (!trip) {
     res.status(404);
@@ -141,6 +159,11 @@ const addTripEntry = asyncHandler(async (req, res) => {
 });
 
 const updateTripEntry = asyncHandler(async (req, res) => {
+  const entryError = validateTripEntry(req.body);
+  if (entryError) {
+    res.status(400);
+    throw new Error(entryError);
+  }
   const trip = await Trip.findById(req.params.id);
   if (!trip) {
     res.status(404);
@@ -215,6 +238,35 @@ const calculateTripSummary = asyncHandler(async (req, res) => {
   res.json({ success: true, data: suggestion });
 });
 
+// Records an immutable driver handover — does not overwrite the trip's original driver.
+const addDriverChange = asyncHandler(async (req, res) => {
+  const { driverId, effectiveAt, reason } = req.body;
+  if (!driverId || !effectiveAt) {
+    res.status(400);
+    throw new Error("driver and effective time are required");
+  }
+  const trip = await Trip.findById(req.params.id);
+  if (!trip) {
+    res.status(404);
+    throw new Error("Trip not found");
+  }
+  const driver = await Driver.findById(driverId);
+  if (!driver) {
+    res.status(400);
+    throw new Error("Driver not found");
+  }
+  trip.driverChanges.push({
+    driver: driverId,
+    driverNameText: driver.name,
+    effectiveAt: new Date(effectiveAt),
+    reason: reason || "",
+    recordedBy: req.user._id,
+  });
+  await trip.save();
+  const populated = await populateTrip(Trip.findById(trip._id));
+  res.status(201).json({ success: true, data: populated });
+});
+
 module.exports = {
   getTrips,
   getTrip,
@@ -227,4 +279,5 @@ module.exports = {
   upsertTripExpense,
   upsertTripSummary,
   calculateTripSummary,
+  addDriverChange,
 };

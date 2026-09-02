@@ -5,7 +5,8 @@ const { defaultRole } = require("../config/accessControl");
 const getPermissions = async (roleKey) => {
   if (roleKey === "admin") return ["*"];
   const role = await Role.findOne({ key: roleKey }).select("permissions");
-  return role ? role.permissions : (defaultRole(roleKey)?.permissions || []);
+  if (role?.permissions?.length) return role.permissions;
+  return defaultRole(roleKey)?.permissions || [];
 };
 
 // Verifies JWT and attaches req.user

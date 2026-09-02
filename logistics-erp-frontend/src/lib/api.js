@@ -24,7 +24,7 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => {
     if (res.config.method?.toLowerCase() === 'get' && !res.config.skipCache) cacheResponse(res.config, res)
-    if (res.config.method?.toLowerCase() !== 'get') invalidateCache('/drivers', '/vehicles', '/trips', '/payments', '/dashboard', '/maintenance', '/inventory', '/approvals', '/fleets')
+    if (res.config.method?.toLowerCase() !== 'get') invalidateCache('/drivers', '/vehicles', '/trips', '/payments', '/dashboard', '/maintenance', '/inventory', '/approvals', '/fleets', '/auth', '/roles')
     return res
   },
   (err) => {
@@ -43,7 +43,7 @@ api.interceptors.response.use(
 export const AuthAPI = {
   login: (email, password) => api.post('/auth/login', { email, password }),
   register: (payload) => api.post('/auth/register', payload),
-  me: () => api.get('/auth/me'),
+  me: () => api.get('/auth/me', { skipCache: true }),
   changePassword: (currentPassword, newPassword) => api.put('/auth/change-password', { currentPassword, newPassword }),
 }
 
@@ -142,7 +142,6 @@ export const PaymentsAPI = {
   remove: (id) => api.delete(`/payments/${id}`),
   uploadReceipt: (id, formData) => api.post(`/payments/${id}/receipt`, formData),
   verify: (id, payload) => api.put(`/payments/${id}/verify`, payload),
-  uploadReceipt: (id, formData) => api.post(`/payments/${id}/receipt`, formData),
 }
 
 // ---- Dashboard ----

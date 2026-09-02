@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { PaymentsAPI, SERVER_ROOT_URL } from '../lib/api'
+import { PaymentsAPI, VehiclesAPI, SERVER_ROOT_URL } from '../lib/api'
 import DataTable from '../components/DataTable'
 import { Modal, PageHeader, Badge, Field, StatCard, Money } from '../components/ui'
 import { Trash2, ShieldCheck, ShieldX, ExternalLink } from 'lucide-react'
@@ -47,6 +47,14 @@ export default function Payments() {
 
   useEffect(() => { load() }, [load])
 
+  useEffect(() => {
+    if (!canManageCashbook) return
+    VehiclesAPI.list({ limit: 200 }).then((res) => {
+      const data = res.data?.data || res.data || []
+      setVehicles(Array.isArray(data) ? data : [])
+    }).catch(() => {})
+  }, [canManageCashbook])
+
   const verify = async (payment, approve) => {
     if (!approve && !confirm('Reject this payment? The client will need to resubmit.')) return
     try {
@@ -62,7 +70,12 @@ export default function Payments() {
     if (user?.role === 'client' && !editing && !receipt) return alert('A payment screenshot is required for client entries.')
     setSaving(true)
     try {
-      const payload = { ...form, amount: form.amount === '' ? undefined : Number(form.amount) }
+      const payload = {
+        ...form,
+        amount: form.amount === '' ? undefined : Number(form.amount),
+        remark: form.notes || undefined,
+      }
+      delete payload.notes
       if (editing) await PaymentsAPI.update(editing._id, payload)
       else {
         const created = await PaymentsAPI.create(payload)
@@ -103,7 +116,7 @@ export default function Payments() {
     { key: 'direction', header: 'Direction', render: (r) => <Badge tone={r.direction === 'received' ? 'positive' : 'negative'}>{r.direction}</Badge> },
     { key: 'category', header: 'Category' },
     { key: 'status', header: 'Status', render: (r) => <Badge tone={r.status === 'completed' ? 'positive' : r.status === 'pending' ? 'accent' : r.status === 'failed' ? 'negative' : 'default'}>{r.status || 'completed'}</Badge> },
-    { key: 'vehicleNoText', header: 'Vehicle', render: (r) => r.vehicleNoText || r.vehicleId?.vehicleNo || '—' },
+    { key: 'vehicleNoText', header: 'Vehicle', render: (r) => r.vehicle?.vehicleNo || r.vehicleNoText || '—' },
     { key: 'amount', header: 'Amount', render: (r) => <Money value={r.direction === 'paid' ? -Math.abs(r.amount || 0) : r.amount} /> },
     ...(canManageCashbook ? [{
       key: 'actions', header: '', render: (r) => (
@@ -171,7 +184,7 @@ export default function Payments() {
         rows={rows}
         loading={loading}
         error={error}
-        onCreate={isClient ? undefined : () => { setEditing(null); setForm(EMPTY); setModalOpen(true) }}
+        onCreate={isClient ? undefined : () => { setEditing(null); setForm({ ...EMPTY, date: new Date().toISOString().slice(0, 10) }); setModalOpen(true) }}
         createLabel="Log payment"
         onRowClick={canManageCashbook ? openEdit : undefined}
         emptyTitle="No payments logged yet"

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { RolesAPI } from '../lib/api'
 import { Field, Modal, PageHeader } from '../components/ui'
+import { useAuth } from '../context/AuthContext'
 
 const EMPTY = { key: '', name: '', permissions: [] }
 
 export default function Roles() {
+  const { refreshSession } = useAuth()
   const [roles, setRoles] = useState([])
   const [permissions, setPermissions] = useState([])
   const [error, setError] = useState(null)
@@ -35,6 +37,7 @@ export default function Roles() {
       if (editingKey) await RolesAPI.update(editingKey, { name: form.name, permissions: form.permissions })
       else await RolesAPI.create(form)
       setOpen(false); setForm(EMPTY); setEditingKey(null); load()
+      await refreshSession()
     } catch (err) { alert(err?.response?.data?.message || 'Could not save role.') } finally { setSaving(false) }
   }
 

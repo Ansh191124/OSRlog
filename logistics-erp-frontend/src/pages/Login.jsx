@@ -1,17 +1,24 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { defaultRouteFor } from '../lib/roles'
 import { Circle, Loader2, Truck } from 'lucide-react'
 import { ServerStatusAPI } from '../lib/api'
 
 export default function Login() {
-  const { login, loading, error } = useAuth()
+  const { user, login, loading, error } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [serverStatus, setServerStatus] = useState('checking')
   const [desktopRequired, setDesktopRequired] = useState(false)
+
+  useEffect(() => {
+    if (user && !user.forcePasswordChange) {
+      navigate(defaultRouteFor(user), { replace: true })
+    }
+  }, [user, navigate])
 
   useEffect(() => {
     let active = true
@@ -43,7 +50,9 @@ export default function Login() {
     e.preventDefault()
     if (desktopRequired) return
     const result = await login(email, password)
-    if (result.ok) navigate(result.forcePasswordChange ? '/change-password' : '/')
+    if (result.ok) {
+      navigate(result.forcePasswordChange ? '/change-password' : defaultRouteFor(result.user))
+    }
   }
 
   return (
