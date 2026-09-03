@@ -1,5 +1,6 @@
 const asyncHandler = require("express-async-handler");
-const { ApprovalRequest, Payment, InventoryItem, Fleet } = require("../models");
+const { ApprovalRequest, Payment, InventoryItem, Fleet, Trip } = require("../models");
+const { findNextAvailableVehicle } = require("./tripController");
 
 const getRequests = asyncHandler(async (req, res) => {
   const where = {};
@@ -13,7 +14,8 @@ const getRequests = asyncHandler(async (req, res) => {
     .populate("vehicle", "vehicleNo")
     .populate("maintenance", "maintenanceType")
     .populate("inventoryItem", "name")
-    .populate("fleet", "name clientName fleetCodeFrom fleetCodeTo reservedVehicleCount")
+    .populate("fleet", "name clientName reservedVehicleCount")
+    .populate("trip", "tripCode lrNumber lrPhotoUrl lrFromLocation lrToLocation lrGoodsDescription requestStatus vehicle")
     .sort({ createdAt: -1 });
   res.json({ success: true, data: rows });
 });
@@ -31,6 +33,21 @@ const approveRequest = asyncHandler(async (req, res) => {
   const record = await ApprovalRequest.findById(req.params.id);
   if (!record) { res.status(404); throw new Error("Approval request not found"); }
   if (record.status !== "requested") { res.status(400); throw new Error("Only requested items can be approved"); }
+
+  if (record.requestType === "lr_trip" && record.trip) {
+    const trip = await Trip.findById(record.trip);
+    if (!trip) { res.status(404); throw new Error("The LR's trip record is missing"); }
+    let vehicleId = req.body.vehicleId;
+    if (!vehicleId) {
+      const vehicle = await findNextAvailableVehicle();
+      if (!vehicle) { res.status(409); throw new Error("No available vehicle right now — assign one manually once a vehicle frees up"); }
+      vehicleId = vehicle._id;
+    }
+    trip.vehicle = vehicleId;
+    trip.requestStatus = "approved";
+    await trip.save();
+  }
+
   record.status = "approved"; record.approvedBy = req.user._id; record.approvedAt = new Date();
   await record.save();
   if (record.requestType === "fleet_reservation" && record.fleet) {
@@ -46,8 +63,12 @@ const rejectRequest = asyncHandler(async (req, res) => {
   record.status = "rejected"; record.rejectionReason = req.body.reason || "Rejected"; record.approvedBy = req.user._id; record.approvedAt = new Date();
   await record.save();
   if (record.requestType === "fleet_reservation" && record.fleet) {
-    // Free up the reserved vehicle-number range so another client can take it.
-    await Fleet.findByIdAndUpdate(record.fleet, { reservationStatus: "none", status: "inactive" });
+    // Free up the LR quota so the client can request again.
+    await Fleet.findByIdAndUpdate(record.fleet, { reservationStatus: "none" });
+  }
+  if (record.requestType === "lr_trip" && record.trip) {
+    // Frees the LR back out of the client's quota usage count.
+    await Trip.findByIdAndUpdate(record.trip, { requestStatus: "rejected", status: "cancelled" });
   }
   res.json({ success: true, data: record });
 });

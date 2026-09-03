@@ -24,7 +24,7 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => {
     if (res.config.method?.toLowerCase() === 'get' && !res.config.skipCache) cacheResponse(res.config, res)
-    if (res.config.method?.toLowerCase() !== 'get') invalidateCache('/drivers', '/vehicles', '/trips', '/payments', '/dashboard', '/maintenance', '/inventory', '/approvals', '/fleets', '/auth', '/roles')
+    if (res.config.method?.toLowerCase() !== 'get') invalidateCache('/drivers', '/vehicles', '/trips', '/payments', '/dashboard', '/maintenance', '/inventory', '/approvals', '/fleets', '/auth', '/roles', '/users', '/settings')
     return res
   },
   (err) => {
@@ -73,18 +73,20 @@ export const ApprovalsAPI = {
 
 export const FleetsAPI = {
   list: () => api.get('/fleets'), create: (payload) => api.post('/fleets', payload),
-  update: (id, payload) => api.put(`/fleets/${id}`, payload), assign: (id, payload) => api.put(`/fleets/${id}/assign`, payload),
+  update: (id, payload) => api.put(`/fleets/${id}`, payload),
 }
 
 export const OrgSettingsAPI = {
-  fleetPool: () => api.get('/settings/fleet-pool'),
-  updateFleetPool: (payload) => api.put('/settings/fleet-pool', payload),
+  dieselRate: () => api.get('/settings/diesel-rate'),
+  updateDieselRate: (payload) => api.put('/settings/diesel-rate', payload),
 }
 
 // ---- Drivers ----
 export const DriversAPI = {
   list: (params) => api.get('/drivers', { params }),
   get: (id) => api.get(`/drivers/${id}`),
+  expiringLicenses: (days = 30) => api.get('/drivers/expiring-licenses', { params: { days } }),
+  performance: (id) => api.get(`/drivers/${id}/performance`),
   create: (payload) => api.post('/drivers', payload),
   update: (id, payload) => api.put(`/drivers/${id}`, payload),
   remove: (id) => api.delete(`/drivers/${id}`),
@@ -97,6 +99,7 @@ export const VehiclesAPI = {
   list: (params) => api.get('/vehicles', { params }),
   expiringDocs: (days = 30) => api.get('/vehicles/expiring-documents', { params: { days } }),
   get: (id) => api.get(`/vehicles/${id}`),
+  performance: (id) => api.get(`/vehicles/${id}/performance`),
   create: (payload) => api.post('/vehicles', payload),
   update: (id, payload) => api.put(`/vehicles/${id}`, payload),
   remove: (id) => api.delete(`/vehicles/${id}`),
@@ -111,6 +114,7 @@ export const TripsAPI = {
   create: (payload) => api.post('/trips', payload),
   update: (id, payload) => api.put(`/trips/${id}`, payload),
   remove: (id) => api.delete(`/trips/${id}`),
+  uploadLrPhoto: (id, formData) => api.post(`/trips/${id}/lr-photo`, formData),
   addEntry: (id, payload) => api.post(`/trips/${id}/entries`, payload),
   updateEntry: (id, entryId, payload) => api.put(`/trips/${id}/entries/${entryId}`, payload),
   removeEntry: (id, entryId) => api.delete(`/trips/${id}/entries/${entryId}`),
@@ -119,6 +123,7 @@ export const TripsAPI = {
   calculate: (id) => api.post(`/trips/${id}/calculate`),
   // Appends an immutable handover record; it must not overwrite the trip's original driver.
   changeDriver: (id, payload) => api.post(`/trips/${id}/driver-changes`, payload),
+  export: (id, format) => api.get(`/trips/${id}/export`, { params: { format }, responseType: 'blob', skipCache: true }),
 }
 
 // ---- Maintenance ----

@@ -13,25 +13,34 @@ const {
   upsertTripSummary,
   calculateTripSummary,
   addDriverChange,
+  exportTrip,
+  uploadLrPhoto,
 } = require("../controllers/tripController");
-const { protect, authorize, requirePermission } = require("../middlewares/auth");
+const { protect, authorize, requirePermission, requireAnyPermission } = require("../middlewares/auth");
+const { upload, setUploadFolder } = require("../middlewares/upload");
 
-router.use(protect, requirePermission("trips"));
+router.use(protect);
 
-router.get("/", getTrips);
-router.get("/:id", getTrip);
-router.post("/", createTrip);
-router.put("/:id", updateTrip);
-router.delete("/:id", authorize("admin"), deleteTrip);
+// Staff (trips) and clients creating/viewing their own LR's (fleets) both need these.
+const staffOrClient = requireAnyPermission("trips", "fleets");
+router.get("/", staffOrClient, getTrips);
+router.get("/:id", staffOrClient, getTrip);
+router.post("/", staffOrClient, createTrip);
+router.post("/:id/lr-photo", staffOrClient, setUploadFolder("trips"), upload.single("file"), uploadLrPhoto);
 
-router.post("/:id/entries", addTripEntry);
-router.put("/:id/entries/:entryId", updateTripEntry);
-router.delete("/:id/entries/:entryId", deleteTripEntry);
+// Everything below is the actual trip sheet - staff only, clients never touch it.
+router.get("/:id/export", requirePermission("trips"), exportTrip);
+router.put("/:id", requirePermission("trips"), updateTrip);
+router.delete("/:id", requirePermission("trips"), authorize("admin"), deleteTrip);
 
-router.put("/:id/expense", upsertTripExpense);
-router.put("/:id/summary", upsertTripSummary);
+router.post("/:id/entries", requirePermission("trips"), addTripEntry);
+router.put("/:id/entries/:entryId", requirePermission("trips"), updateTripEntry);
+router.delete("/:id/entries/:entryId", requirePermission("trips"), deleteTripEntry);
 
-router.post("/:id/calculate", calculateTripSummary);
-router.post("/:id/driver-changes", addDriverChange);
+router.put("/:id/expense", requirePermission("trips"), upsertTripExpense);
+router.put("/:id/summary", requirePermission("trips"), upsertTripSummary);
+
+router.post("/:id/calculate", requirePermission("trips"), calculateTripSummary);
+router.post("/:id/driver-changes", requirePermission("trips"), addDriverChange);
 
 module.exports = router;

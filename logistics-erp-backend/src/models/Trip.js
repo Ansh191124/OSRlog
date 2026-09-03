@@ -38,7 +38,8 @@ const tripExpenseSchema = new Schema(
     ureaNagad: { type: Number },
     kiraya: { type: Number },
     tollTax: { type: Number },
-    diesel: { type: Number },
+    dieselLitres: { type: Number }, // auto-multiplies by OrgSettings.dieselRate to suggest `diesel` below
+    diesel: { type: Number }, // amount - auto-filled from dieselLitres, but always manually overridable
     salary: { type: Number },
     incentive: { type: Number },
     urea: { type: Number },
@@ -135,13 +136,27 @@ const tripSchema = new Schema(
 
     createdBy: { type: Schema.Types.ObjectId, ref: "User" },
     updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
+
+    // LR (Lorry Receipt) request flow: a client creates one of these against an
+    // approved Fleet quota, uploads a photo of the physical LR paper, and it
+    // waits here until admin/co-admin approves it (assigning a vehicle) or
+    // rejects it. Left undefined entirely for trips staff create directly.
+    fleet: { type: Schema.Types.ObjectId, ref: "Fleet" },
+    lrNumber: { type: String, trim: true },
+    lrPhotoUrl: { type: String },
+    lrFromLocation: { type: String, trim: true }, // where the client's goods are picked up from
+    lrToLocation: { type: String, trim: true }, // where they're being delivered to
+    lrGoodsDescription: { type: String, trim: true }, // what's being carried, e.g. "50 bags cement"
+    requestStatus: { type: String, enum: ["requested", "approved", "rejected"] },
+    requestedBy: { type: Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }
 );
 
-tripSchema.index({ tripCode: "text", vehicleNoText: "text", driverNameText: "text" });
+tripSchema.index({ tripCode: "text", vehicleNoText: "text", driverNameText: "text", lrNumber: "text" });
 tripSchema.index({ vehicle: 1 });
 tripSchema.index({ driver: 1 });
 tripSchema.index({ startDate: -1 });
+tripSchema.index({ fleet: 1 });
 
 module.exports = mongoose.model("Trip", tripSchema);

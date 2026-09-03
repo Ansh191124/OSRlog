@@ -62,4 +62,13 @@ const requirePermission = (permission) => {
   };
 };
 
-module.exports = { protect, authorize, requirePermission, getPermissions };
+// Passes if the user has ANY of the listed permissions - e.g. trip routes that both
+// staff (trips) and clients creating/viewing their own LR's (fleets) need to reach.
+const requireAnyPermission = (...permissions) => {
+  return (req, res, next) => {
+    if (req.user?.permissions?.includes("*") || permissions.some((p) => req.user?.permissions?.includes(p))) return next();
+    return res.status(403).json({ success: false, message: `Your role does not have ${permissions.join(" or ")} access` });
+  };
+};
+
+module.exports = { protect, authorize, requirePermission, requireAnyPermission, getPermissions };

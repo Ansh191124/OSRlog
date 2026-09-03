@@ -1,10 +1,17 @@
 const asyncHandler = require("express-async-handler");
-const { Vehicle, Driver } = require("../models");
+const { Vehicle, Driver, Trip } = require("../models");
 const { getFileUrl } = require("../middlewares/upload");
 const { getPagination, paginationMeta } = require("../utils/api");
+const {
+  vehicleTripFilter,
+  summarizeTrips,
+  attachPerformanceToVehicles,
+} = require("../utils/tripPerformance");
+
+const tripListFields = "tripCode vehicle vehicleNoText driver driverNameText startDate endDate status summary";
 
 const getVehicles = asyncHandler(async (req, res) => {
-  const { status, search } = req.query;
+  const { status, search, includePerformance } = req.query;
   const { page, limit, skip } = getPagination(req.query);
   const where = {};
   if (req.user.role === "employee") where.assignedEmployee = req.user._id;
@@ -18,14 +25,46 @@ const getVehicles = asyncHandler(async (req, res) => {
   }
 
   const [rows, count] = await Promise.all([
-    Vehicle.find(where).populate("assignedEmployee", "name role").sort({ createdAt: -1 }).skip(skip).limit(limit),
+    Vehicle.find(where).populate("assignedEmployee", "name role").sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
     Vehicle.countDocuments(where),
   ]);
 
+  let data = rows;
+  if (includePerformance === "true" && rows.length) {
+    const trips = await Trip.find({}, "vehicle vehicleNoText summary").lean();
+    data = attachPerformanceToVehicles(rows, trips);
+  }
+
   res.json({
     success: true,
-    data: rows,
+    data,
     pagination: paginationMeta(count, page, limit),
+  });
+});
+
+const getVehiclePerformance = asyncHandler(async (req, res) => {
+  const vehicle = await Vehicle.findById(req.params.id).populate("assignedEmployee", "name role").lean();
+  if (!vehicle) {
+    res.status(404);
+    throw new Error("Vehicle not found");
+  }
+  if (req.user.role === "employee" && String(vehicle.assignedEmployee?._id) !== String(req.user._id)) {
+    res.status(403);
+    throw new Error("This vehicle is not assigned to you");
+  }
+
+  const trips = await Trip.find(vehicleTripFilter(vehicle), tripListFields)
+    .populate("driver", "name phone")
+    .sort({ startDate: -1, createdAt: -1 })
+    .lean();
+
+  res.json({
+    success: true,
+    data: {
+      vehicle,
+      summary: summarizeTrips(trips),
+      trips,
+    },
   });
 });
 
@@ -145,6 +184,7 @@ const uploadVehicleDoc = asyncHandler(async (req, res) => {
 module.exports = {
   getVehicles,
   getVehicle,
+  getVehiclePerformance,
   createVehicle,
   updateVehicle,
   deleteVehicle,

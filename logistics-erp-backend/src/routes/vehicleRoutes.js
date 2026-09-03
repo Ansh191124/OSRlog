@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   getVehicles,
   getVehicle,
+  getVehiclePerformance,
   createVehicle,
   updateVehicle,
   deleteVehicle,
@@ -17,6 +18,7 @@ router.use(protect, requirePermission("vehicles"));
 
 router.get("/", getVehicles);
 router.get("/expiring-documents", getExpiringDocuments);
+router.get("/:id/performance", getVehiclePerformance);
 router.get("/:id", getVehicle);
 router.post("/", authorize("admin", "co_admin"), createVehicle);
 router.put("/:id", authorize("admin", "co_admin", "employee"), updateVehicle);

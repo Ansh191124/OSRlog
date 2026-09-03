@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { DriversAPI } from '../lib/api'
-import DataTable from '../components/DataTable'
-import { Modal, PageHeader, Badge, Field } from '../components/ui'
-import { Trash2, Lock, LockOpen } from 'lucide-react'
+import TripPerformanceModal from '../components/TripPerformanceModal'
+import { Modal, PageHeader, Badge, Field, Money, LoadState, ErrorState, EmptyState } from '../components/ui'
+import { Trash2, Lock, LockOpen, Pencil, Search, Plus, ChevronLeft, ChevronRight, Phone, IdCard } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const EMPTY = { name: '', phone: '', licenseNumber: '', licenseExpiry: '', driverType: 'permanent', temporaryUntil: '', address: '', salary: '', status: 'active' }
@@ -21,12 +21,16 @@ export default function Drivers() {
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
   const [mandatoryUnlocked, setMandatoryUnlocked] = useState(false)
+  const [performanceTarget, setPerformanceTarget] = useState(null)
+  const [performance, setPerformance] = useState(null)
+  const [performanceLoading, setPerformanceLoading] = useState(false)
+  const [performanceError, setPerformanceError] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await DriversAPI.list({ search: search || undefined, page, limit: 10 })
+      const res = await DriversAPI.list({ search: search || undefined, page, limit: 10, includePerformance: true })
       const data = res.data?.data || res.data || []
       setRows(Array.isArray(data) ? data : [])
       const pg = res.data?.pagination
@@ -40,8 +44,24 @@ export default function Drivers() {
 
   useEffect(() => { load() }, [load])
 
+  const openPerformance = async (row) => {
+    setPerformanceTarget(row)
+    setPerformance(null)
+    setPerformanceError(null)
+    setPerformanceLoading(true)
+    try {
+      const res = await DriversAPI.performance(row._id)
+      setPerformance(res.data?.data || null)
+    } catch (err) {
+      setPerformanceError(err?.response?.data?.message || 'Could not load driver earnings.')
+    } finally {
+      setPerformanceLoading(false)
+    }
+  }
+
   const openCreate = () => { setEditing(null); setForm(EMPTY); setMandatoryUnlocked(false); setModalOpen(true) }
   const openEdit = (row) => {
+    setPerformanceTarget(null)
     setEditing(row)
     setMandatoryUnlocked(false)
     setForm({
@@ -78,42 +98,108 @@ export default function Drivers() {
     }
   }
 
-  const columns = [
-    { key: 'name', header: 'Name', render: (r) => <span className="font-medium">{r.name || '—'}</span> },
-    { key: 'phone', header: 'Phone' },
-    { key: 'licenseNumber', header: 'License #' },
-    { key: 'licenseExpiry', header: 'License Expiry', render: (r) => <LicenseRecommendation date={r.licenseExpiry} /> },
-    { key: 'driverType', header: 'Type', render: (r) => <Badge tone={r.driverType === 'temporary' ? 'accent' : 'steel'}>{r.driverType || 'permanent'}</Badge> },
-    { key: 'salaryAmount', header: 'Salary', render: (r) => r.salaryAmount !== undefined && r.salaryAmount !== null ? <span className="tabular">₹{Number(r.salaryAmount).toLocaleString('en-IN')}</span> : '—' },
-    { key: 'status', header: 'Status', render: (r) => <Badge tone={r.status === 'active' ? 'positive' : 'steel'}>{r.status || 'unknown'}</Badge> },
-    ...(isAdmin ? [{
-      key: 'actions', header: '', render: (r) => (
-        <button onClick={(e) => { e.stopPropagation(); remove(r) }} className="p-1.5 text-steel hover:text-negative rounded">
-          <Trash2 className="w-4 h-4" />
-        </button>
-      )
-    }] : []),
-  ]
-
   return (
     <div>
-      <PageHeader eyebrow="Driver master" title="Drivers" description="License, contact and salary records for every driver on the roster." />
-      <DataTable
-        columns={columns}
-        rows={rows}
-        loading={loading}
-        error={error}
-        search={search}
-        onSearch={(v) => { setPage(1); setSearch(v) }}
-        searchPlaceholder="Search drivers by name or phone…"
-        page={page}
-        totalPages={totalPages}
-        onPage={setPage}
-        onCreate={isAdmin ? openCreate : undefined}
-        createLabel="Add driver"
-        onRowClick={isAdmin ? openEdit : undefined}
-        emptyTitle="No drivers logged yet"
-        emptyDescription="Add your first driver to start assigning trips and tracking license expiry."
+      <PageHeader eyebrow="Driver master" title="Drivers" description="License, contact and salary records — plus real earnings (salary + advance paid) from completed trip sheets." />
+
+      <div className="card overflow-hidden mb-4">
+        <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-line">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="w-4 h-4 text-steel-light absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              value={search}
+              onChange={(e) => { setPage(1); setSearch(e.target.value) }}
+              placeholder="Search drivers by name or phone…"
+              className="input-field pl-9"
+            />
+          </div>
+          {isAdmin && (
+            <button onClick={openCreate} className="btn-accent rounded px-3 py-2 text-sm flex items-center gap-1.5 shrink-0">
+              <Plus className="w-4 h-4" /> Add driver
+            </button>
+          )}
+        </div>
+      </div>
+
+      {loading && <LoadState />}
+      {!loading && error && <ErrorState message={error} />}
+      {!loading && !error && rows.length === 0 && (
+        <EmptyState title="No drivers logged yet" description="Add your first driver to start assigning trips and tracking license expiry." />
+      )}
+
+      {!loading && !error && rows.length > 0 && (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {rows.map((r) => (
+              <button
+                key={r._id}
+                onClick={() => openPerformance(r)}
+                className="card p-4 text-left flex flex-col gap-3 hover:shadow-md hover:border-accent/30 transition-all"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-display text-base truncate">{r.name || 'Unnamed driver'}</p>
+                    <p className="text-xs text-steel flex items-center gap-1 mt-0.5"><Phone className="w-3 h-3" /> {r.phone || '—'}</p>
+                  </div>
+                  <Badge tone={r.status === 'active' ? 'positive' : 'steel'}>{r.status || 'unknown'}</Badge>
+                </div>
+
+                <div className="text-xs text-steel flex items-center gap-1">
+                  <IdCard className="w-3.5 h-3.5" /> {r.licenseNumber || 'No license #'}
+                </div>
+                <LicenseRecommendation date={r.licenseExpiry} />
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge tone={r.driverType === 'temporary' ? 'accent' : 'steel'}>{r.driverType || 'permanent'}</Badge>
+                  <Badge tone="steel">{r.performance?.tripCount ?? 0} trip{(r.performance?.tripCount ?? 0) === 1 ? '' : 's'}</Badge>
+                </div>
+
+                <div className="mt-auto pt-2 border-t border-line flex items-center justify-between">
+                  <div>
+                    <p className="label-field">Earnings</p>
+                    <Money value={r.performance?.totalEarning} />
+                  </div>
+                  {isAdmin && (
+                    <div className="flex items-center gap-1">
+                      <span onClick={(e) => { e.stopPropagation(); openEdit(r) }} className="p-1.5 text-steel hover:text-accent-deep rounded" role="button" aria-label="Edit driver">
+                        <Pencil className="w-4 h-4" />
+                      </span>
+                      <span onClick={(e) => { e.stopPropagation(); remove(r) }} className="p-1.5 text-steel hover:text-negative rounded" role="button" aria-label="Delete driver">
+                        <Trash2 className="w-4 h-4" />
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-1 py-4 text-sm text-steel">
+              <span>Page {page} of {totalPages}</span>
+              <div className="flex gap-1">
+                <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="p-1.5 rounded border border-line disabled:opacity-40 hover:bg-paper-2"><ChevronLeft className="w-4 h-4" /></button>
+                <button disabled={page >= totalPages} onClick={() => setPage(page + 1)} className="p-1.5 rounded border border-line disabled:opacity-40 hover:bg-paper-2"><ChevronRight className="w-4 h-4" /></button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      <TripPerformanceModal
+        mode="driver"
+        open={Boolean(performanceTarget)}
+        onClose={() => { setPerformanceTarget(null); setPerformance(null); setPerformanceError(null) }}
+        title={performanceTarget ? `Driver earnings — ${performanceTarget.name}` : 'Driver earnings'}
+        subtitle={performanceTarget ? `${performanceTarget.phone || 'No phone'} · License ${performanceTarget.licenseNumber || '—'}` : ''}
+        summary={performance?.summary}
+        trips={performance?.trips}
+        loading={performanceLoading}
+        error={performanceError}
+        partnerLabel="Vehicle"
+        partnerValue={(trip) => trip.vehicleNoText || trip.vehicle?.vehicleNo || '—'}
+        onEdit={isAdmin && performanceTarget ? () => openEdit(performanceTarget) : undefined}
+        editLabel="Edit driver"
       />
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit driver' : 'Add driver'}>

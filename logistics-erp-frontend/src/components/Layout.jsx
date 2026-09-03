@@ -3,6 +3,7 @@ import { LayoutDashboard, Route, Users, Truck, Wrench, Wallet, UserCog, Package,
 import { useAuth } from '../context/AuthContext'
 import { useState } from 'react'
 import { canAccess } from '../lib/roles'
+import AlertsBell from './AlertsBell'
 
 const NAV = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true, area: 'dashboard' },
@@ -34,9 +35,12 @@ export default function Layout({ children }) {
       {/* Mobile top bar */}
       <div className="md:hidden fixed top-0 inset-x-0 h-14 bg-asphalt text-white flex items-center justify-between px-4 z-40">
         <span className="font-display text-lg tracking-wide">OSR LOGISTICS</span>
-        <button onClick={() => setMobileOpen(!mobileOpen)} aria-label="Toggle menu">
-          {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </button>
+        <div className="flex items-center gap-1">
+          <AlertsBell />
+          <button onClick={() => setMobileOpen(!mobileOpen)} aria-label="Toggle menu">
+            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
       </div>
 
       {/* Sidebar */}
@@ -45,11 +49,14 @@ export default function Layout({ children }) {
         transition-transform duration-200 ease-out
         ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0
       `}>
-        <div className="hidden md:flex items-center gap-2 px-6 py-6 border-b border-white/10">
-          <div className="w-8 h-8 rounded-md bg-accent/15 border border-accent/30 flex items-center justify-center">
-            <Truck className="w-4 h-4 text-accent" />
+        <div className="hidden md:flex items-center justify-between gap-2 px-6 py-6 border-b border-white/10">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-md bg-accent/15 border border-accent/30 flex items-center justify-center shrink-0">
+              <Truck className="w-4 h-4 text-accent" />
+            </div>
+            <span className="font-display text-xl tracking-wide truncate">OSR LOGISTICS</span>
           </div>
-          <span className="font-display text-xl tracking-wide">OSR LOGISTICS</span>
+          <AlertsBell />
         </div>
         <div className="md:hidden h-14" />
 

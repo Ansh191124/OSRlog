@@ -125,13 +125,13 @@ const getOverview = asyncHandler(async (req, res) => {
     if (paymentType === "online" && direction === "paid") paymentTotals.onlinePaid = r.total || 0;
   });
 
-  const [totalVehicles, activeVehicles, todayTrips, totalFleets, reservedFleets, runningFleets, todayFleets] = await Promise.all([
+  const [totalVehicles, activeVehicles, todayTrips, totalFleets, reservedFleets, runningLrs, todayFleets] = await Promise.all([
     Vehicle.countDocuments(),
     Vehicle.countDocuments({ status: "active" }),
     Trip.countDocuments({ startDate: { $gte: startOfToday, $lt: startOfTomorrow } }),
     Fleet.countDocuments(),
     Fleet.countDocuments({ reservationStatus: { $in: ["reserved", "approved"] } }),
-    Fleet.countDocuments({ status: "active" }),
+    Trip.countDocuments({ requestStatus: "approved" }),
     Fleet.countDocuments({
       $or: [
         { createdAt: { $gte: startOfToday, $lt: startOfTomorrow } },
@@ -163,7 +163,7 @@ const getOverview = asyncHandler(async (req, res) => {
         online: (paymentTotals.onlineReceived || 0) - (paymentTotals.onlinePaid || 0),
       },
       vehicleCounts: { active: activeVehicles, total: totalVehicles },
-      fleetCounts: { total: totalFleets, reserved: reservedFleets, running: runningFleets, today: todayFleets },
+      fleetCounts: { total: totalFleets, reserved: reservedFleets, running: runningLrs, today: todayFleets },
       todayTrips,
     },
   });

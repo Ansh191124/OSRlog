@@ -3,6 +3,8 @@ const router = express.Router();
 const {
   getDrivers,
   getDriver,
+  getExpiringLicenses,
+  getDriverPerformance,
   createDriver,
   updateDriver,
   deleteDriver,
@@ -15,6 +17,8 @@ const { upload, setUploadFolder } = require("../middlewares/upload");
 router.use(protect, requirePermission("drivers"));
 
 router.get("/", getDrivers);
+router.get("/expiring-licenses", getExpiringLicenses);
+router.get("/:id/performance", getDriverPerformance);
 router.get("/:id", getDriver);
 router.post("/", authorize("admin"), createDriver);
 router.put("/:id", authorize("admin"), updateDriver);

@@ -1,11 +1,18 @@
 const asyncHandler = require("express-async-handler");
-const { Driver } = require("../models");
+const { Driver, Trip } = require("../models");
 const { getFileUrl } = require("../middlewares/upload");
 const { getPagination, paginationMeta } = require("../utils/api");
+const {
+  driverTripFilter,
+  summarizeDriverTrips,
+  attachPerformanceToDrivers,
+} = require("../utils/tripPerformance");
+
+const tripListFields = "tripCode vehicle vehicleNoText driver driverNameText startDate endDate status summary expense entries";
 
 // @route  GET /api/drivers
 const getDrivers = asyncHandler(async (req, res) => {
-  const { status, search } = req.query;
+  const { status, search, includePerformance } = req.query;
   const { page, limit, skip } = getPagination(req.query);
   const where = {};
   if (status) where.status = status;
@@ -22,14 +29,55 @@ const getDrivers = asyncHandler(async (req, res) => {
       .populate("assignedVehicle", "vehicleNo")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit),
+      .limit(limit)
+      .lean(),
     Driver.countDocuments(where),
   ]);
 
+  let data = rows;
+  if (includePerformance === "true" && rows.length) {
+    const trips = await Trip.find({}, "driver driverNameText summary expense entries").lean();
+    data = attachPerformanceToDrivers(rows, trips);
+  }
+
   res.json({
     success: true,
-    data: rows,
+    data,
     pagination: paginationMeta(count, page, limit),
+  });
+});
+
+// @route  GET /api/drivers/expiring-licenses
+const getExpiringLicenses = asyncHandler(async (req, res) => {
+  const days = Number(req.query.days) || 30;
+  const today = new Date();
+  const future = new Date();
+  future.setDate(today.getDate() + days);
+
+  const drivers = await Driver.find({ licenseExpiry: { $gte: today, $lte: future } }).sort({ licenseExpiry: 1 });
+  res.json({ success: true, data: drivers });
+});
+
+// @route  GET /api/drivers/:id/performance
+const getDriverPerformance = asyncHandler(async (req, res) => {
+  const driver = await Driver.findById(req.params.id).populate("assignedVehicle", "vehicleNo").lean();
+  if (!driver) {
+    res.status(404);
+    throw new Error("Driver not found");
+  }
+
+  const trips = await Trip.find(driverTripFilter(driver), tripListFields)
+    .populate("vehicle", "vehicleNo vehicleType")
+    .sort({ startDate: -1, createdAt: -1 })
+    .lean();
+
+  res.json({
+    success: true,
+    data: {
+      driver,
+      summary: summarizeDriverTrips(trips),
+      trips,
+    },
   });
 });
 
@@ -122,6 +170,8 @@ const uploadDriverLicenseDoc = asyncHandler(async (req, res) => {
 module.exports = {
   getDrivers,
   getDriver,
+  getExpiringLicenses,
+  getDriverPerformance,
   createDriver,
   updateDriver,
   deleteDriver,

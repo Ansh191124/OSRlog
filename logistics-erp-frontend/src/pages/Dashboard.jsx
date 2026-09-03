@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { DashboardAPI, FleetsAPI, OrgSettingsAPI } from '../lib/api'
+import { DashboardAPI, FleetsAPI, TripsAPI } from '../lib/api'
 import { StatCard, LoadState, ErrorState, PageHeader, Badge } from '../components/ui'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line } from 'recharts'
 import { useAuth } from '../context/AuthContext'
@@ -14,7 +14,7 @@ export default function Dashboard() {
 
 function ClientDashboard() {
   const [fleets, setFleets] = useState([])
-  const [pool, setPool] = useState(null)
+  const [trips, setTrips] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -23,10 +23,10 @@ function ClientDashboard() {
     async function load() {
       setLoading(true); setError(null)
       try {
-        const [fl, pl] = await Promise.all([FleetsAPI.list(), OrgSettingsAPI.fleetPool()])
+        const [fl, tr] = await Promise.all([FleetsAPI.list(), TripsAPI.list({ limit: 200 })])
         if (cancelled) return
         setFleets(fl.data?.data || [])
-        setPool(pl.data?.data || null)
+        setTrips(tr.data?.data || [])
       } catch (err) {
         if (!cancelled) setError(err?.response?.data?.message || 'Could not load your fleet overview.')
       } finally { if (!cancelled) setLoading(false) }
@@ -36,47 +36,41 @@ function ClientDashboard() {
     return () => { cancelled = true; window.clearInterval(timer) }
   }, [])
 
-  const reserved = fleets.filter((f) => f.reservationStatus === 'reserved').length
-  const approved = fleets.filter((f) => f.reservationStatus === 'approved').length
-  const running = fleets.filter((f) => f.status === 'active').length
-  const totalVehicles = fleets.reduce((sum, f) => sum + (f.vehicles?.length || 0), 0)
+  const quotaPending = fleets.filter((f) => f.reservationStatus === 'reserved').length
+  const quotaApproved = fleets.filter((f) => f.reservationStatus === 'approved').reduce((sum, f) => sum + (f.reservedVehicleCount || 0), 0)
+  const lrRequested = trips.filter((t) => t.requestStatus === 'requested').length
+  const lrRunning = trips.filter((t) => t.requestStatus === 'approved').length
 
   return (
     <div>
-      <PageHeader eyebrow="Your fleet" title="Fleet overview" description="Live status of the fleets you've reserved. Refreshes automatically every 30 seconds." />
+      <PageHeader eyebrow="Your LR's" title="Fleet overview" description="Live status of your LR quota and every LR you've created. Refreshes automatically every 30 seconds." />
       {loading && <LoadState label="Pulling your fleet status" />}
       {!loading && error && <ErrorState message={error} />}
       {!loading && !error && (
         <div className="space-y-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatCard label="Awaiting Approval" value={reserved} sub="Sent to admin" />
-            <StatCard label="Approved" value={approved} sub="Waiting on vehicle assignment" />
-            <StatCard label="Running" value={running} sub="Vehicles assigned and active" />
-            <StatCard label="Vehicles Assigned" value={totalVehicles} sub="Across all your fleets" />
+            <StatCard label="Quota Requests Pending" value={quotaPending} sub="Sent to admin" />
+            <StatCard label="LR Quota Approved" value={quotaApproved} sub="Total LR's you can create" />
+            <StatCard label="LR's Awaiting Approval" value={lrRequested} sub="Vehicle not assigned yet" />
+            <StatCard label="LR's Running" value={lrRunning} sub="Vehicle assigned, trip active" />
           </div>
-          {pool && (
-            <div className="card p-5">
-              <h2 className="font-display text-lg mb-2">Fleet pool availability</h2>
-              <p className="text-sm text-steel">{pool.remainingSlots} of {pool.totalSlots} serial fleet slots ({pool.fleetPrefix}-{pool.fleetRangeStart} to {pool.fleetPrefix}-{pool.fleetRangeEnd}) are currently unreserved.</p>
-            </div>
-          )}
           <div className="card p-5">
-            <h2 className="font-display text-lg mb-4">Your fleets</h2>
+            <h2 className="font-display text-lg mb-4">Your LR quotas</h2>
             {fleets.length ? (
               <div className="space-y-3">
                 {fleets.map((f) => (
                   <div key={f._id} className="flex items-center justify-between border border-line rounded px-4 py-3">
                     <div>
                       <p className="font-medium">{f.name}</p>
-                      <p className="text-xs text-steel font-mono">{f.fleetCodeFrom} – {f.fleetCodeTo} · {f.reservedVehicleCount} vehicle(s)</p>
+                      <p className="text-xs text-steel font-mono">{f.lrUsedCount ?? 0} of {f.reservedVehicleCount} LR's used</p>
                     </div>
-                    <Badge tone={f.status === 'active' ? 'positive' : f.reservationStatus === 'approved' ? 'accent' : 'default'}>
-                      {f.status === 'active' ? 'Running' : f.reservationStatus === 'approved' ? 'Approved · awaiting assignment' : f.reservationStatus === 'reserved' ? 'Awaiting admin approval' : f.status.replace('_', ' ')}
+                    <Badge tone={f.reservationStatus === 'approved' ? 'positive' : f.reservationStatus === 'reserved' ? 'default' : 'steel'}>
+                      {f.reservationStatus === 'approved' ? 'Approved' : f.reservationStatus === 'reserved' ? 'Awaiting admin approval' : 'None'}
                     </Badge>
                   </div>
                 ))}
               </div>
-            ) : <p className="text-sm text-steel py-6 text-center">No fleets reserved yet.</p>}
+            ) : <p className="text-sm text-steel py-6 text-center">No LR quotas requested yet.</p>}
           </div>
         </div>
       )}
@@ -159,9 +153,9 @@ function AdminDashboard() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-4">
-            <StatCard label="Today's Fleet Activity" value={overview?.fleetCounts?.today ?? '—'} sub="Fleets created or updated today · live" />
-            <StatCard label="Fleets Reserved" value={overview?.fleetCounts?.reserved ?? '—'} sub="Awaiting or holding a reservation" />
-            <StatCard label="Fleets Running" value={overview?.fleetCounts?.running ?? '—'} sub="Vehicles assigned, in service" />
+            <StatCard label="Today's Fleet Activity" value={overview?.fleetCounts?.today ?? '—'} sub="LR quotas created or updated today · live" />
+            <StatCard label="LR Quotas Pending/Approved" value={overview?.fleetCounts?.reserved ?? '—'} sub="Awaiting or holding an approved quota" />
+            <StatCard label="LR's Running" value={overview?.fleetCounts?.running ?? '—'} sub="Vehicle assigned, in service" />
           </div>
 
           <div className="card p-5">

@@ -5,7 +5,7 @@ const { getPagination, paginationMeta, endOfDay } = require("../utils/api");
 
 const getPayments = asyncHandler(async (req, res) => {
   const {
-    paymentType, direction, category, vehicleId, driverId, tripId, fleetId,
+    paymentType, direction, category, status, vehicleId, driverId, tripId, fleetId,
     from, to, search,
   } = req.query;
 
@@ -16,6 +16,7 @@ const getPayments = asyncHandler(async (req, res) => {
   if (paymentType) where.paymentType = paymentType;
   if (direction) where.direction = direction;
   if (category) where.category = category;
+  if (status) where.status = status;
   if (vehicleId) where.vehicle = vehicleId;
   if (driverId) where.driver = driverId;
   if (tripId) where.trip = tripId;
@@ -38,7 +39,7 @@ const getPayments = asyncHandler(async (req, res) => {
       .populate("trip", "tripCode")
       .populate("vehicle", "vehicleNo")
       .populate("driver", "name")
-      .populate("fleet", "name clientName fleetCodeFrom fleetCodeTo")
+      .populate("fleet", "name clientName reservedVehicleCount")
       .populate("verifiedBy", "name")
       .sort({ date: -1, createdAt: -1 })
       .skip(skip)

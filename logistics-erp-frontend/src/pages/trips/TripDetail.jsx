@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { DriversAPI, TripsAPI } from '../../lib/api'
+import { DriversAPI, TripsAPI, OrgSettingsAPI, SERVER_ROOT_URL } from '../../lib/api'
 import { LoadState, ErrorState, Badge, Money } from '../../components/ui'
-import { ArrowLeft, Plus, Trash2, Sparkles, Pencil, Check, X, UserRoundCog } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Sparkles, Pencil, Check, X, UserRoundCog, Download, FileSpreadsheet, FileImage, ExternalLink } from 'lucide-react'
 
-const REQUIRED_ENTRY_KEYS = new Set(['date', 'partyName', 'fromLocation', 'toLocation'])
+const REQUIRED_ENTRY_KEYS = new Set(['date', 'partyName', 'fromLocation', 'toLocation', 'freight', 'adv'])
 
 const ENTRY_FIELDS = [
   { key: 'date', label: 'Date', type: 'date' },
@@ -18,7 +18,7 @@ const ENTRY_FIELDS = [
   { key: 'amt', label: 'Amount', type: 'number' },
 ]
 
-const EXPENSE_FIELDS = ['dala', 'border', 'tollTax', 'diesel', 'salary', 'urea', 'fooding', 'ureaNagad', 'kiraya']
+const EXPENSE_FIELDS = ['dala', 'border', 'tollTax', 'dieselLitres', 'diesel', 'salary', 'urea', 'fooding', 'ureaNagad', 'kiraya']
 
 const SUMMARY_FIELDS = [
   'drAdv', 'expenseTotal', 'total', 'gpsKm', 'mtrKm', 'diffKm',
@@ -47,6 +47,8 @@ export default function TripDetail() {
   const [drivers, setDrivers] = useState([])
   const [handover, setHandover] = useState({ driverId: '', effectiveAt: '', reason: '' })
   const [savingHandover, setSavingHandover] = useState(false)
+  const [dieselRate, setDieselRate] = useState(0)
+  const [exporting, setExporting] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -72,6 +74,46 @@ export default function TripDetail() {
       .catch(() => setDrivers([]))
   }, [])
 
+  useEffect(() => {
+    OrgSettingsAPI.dieselRate()
+      .then((res) => setDieselRate(Number(res.data?.data?.dieselRate) || 0))
+      .catch(() => setDieselRate(0))
+  }, [])
+
+  // Diesel amount auto-calculates from litres x the org diesel rate, but stays
+  // fully editable afterwards — matches the "suggest, never force" pattern
+  // used by the summary box's "Suggest from entries" button.
+  const setExpenseField = (key, value) => {
+    setExpenseForm((prev) => {
+      const next = { ...prev, [key]: value }
+      if (key === 'dieselLitres' && dieselRate > 0) {
+        const litres = Number(value)
+        if (value !== '' && !Number.isNaN(litres)) next.diesel = Number((litres * dieselRate).toFixed(2))
+      }
+      return next
+    })
+  }
+
+  const downloadExport = async (format) => {
+    setExporting(format)
+    try {
+      const res = await TripsAPI.export(id, format)
+      const blob = new Blob([res.data], { type: res.headers?.['content-type'] })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${trip?.tripCode || 'trip'}.${format === 'excel' ? 'xlsx' : 'pdf'}`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      alert('Could not download the trip sheet export.')
+    } finally {
+      setExporting('')
+    }
+  }
+
   const changeDriver = async (event) => {
     event.preventDefault()
     if (!handover.driverId) return
@@ -87,9 +129,9 @@ export default function TripDetail() {
 
   const addEntry = async (e) => {
     e.preventDefault()
-    const missing = ['date', 'partyName', 'fromLocation', 'toLocation'].filter((k) => !newEntry[k]?.trim?.() && !newEntry[k])
+    const missing = [...REQUIRED_ENTRY_KEYS].filter((k) => !newEntry[k]?.trim?.() && !newEntry[k])
     if (missing.length) {
-      alert('Date, party, from and to are required for each leg.')
+      alert('Date, party, from, to, freight and advance are required for each leg.')
       return
     }
     setAddingEntry(true)
@@ -116,9 +158,9 @@ export default function TripDetail() {
   }
 
   const saveEditEntry = async (entryId) => {
-    const missing = ['date', 'partyName', 'fromLocation', 'toLocation'].filter((k) => !editEntry[k]?.trim?.() && !editEntry[k])
+    const missing = [...REQUIRED_ENTRY_KEYS].filter((k) => !editEntry[k]?.trim?.() && !editEntry[k])
     if (missing.length) {
-      alert('Date, party, from and to are required for each leg.')
+      alert('Date, party, from, to, freight and advance are required for each leg.')
       return
     }
     try {
@@ -203,6 +245,25 @@ export default function TripDetail() {
           </div>
         </div>
       </div>
+
+      {trip.lrNumber && (
+        <div className="card p-5 mb-6 border-accent/30 bg-accent-soft/30">
+          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-accent-deep mb-2">Client's LR request</p>
+          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2 text-sm">
+            <div><span className="text-steel block text-xs">LR number</span><span className="font-mono font-medium">{trip.lrNumber}</span></div>
+            <div><span className="text-steel block text-xs">From → To</span><span>{trip.lrFromLocation || '—'} → {trip.lrToLocation || '—'}</span></div>
+            <div><span className="text-steel block text-xs">Goods</span><span>{trip.lrGoodsDescription || '—'}</span></div>
+            {trip.lrPhotoUrl && (
+              <div>
+                <span className="text-steel block text-xs">LR photo</span>
+                <a href={`${SERVER_ROOT_URL}${trip.lrPhotoUrl}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-accent-deep">
+                  <FileImage className="w-3.5 h-3.5" /> View <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <Section title="Driver handover" subtitle="Records a new driver from the stated time. Earlier trip data and previous handovers remain unchanged.">
         <form onSubmit={changeDriver} className="grid md:grid-cols-[1.5fr_1fr_2fr_auto] gap-3 items-end">
@@ -294,15 +355,15 @@ export default function TripDetail() {
       </Section>
 
       {/* Expense box */}
-      <Section title="Expense box" subtitle="Line items exactly as filled on the paper sheet's expense box.">
+      <Section title="Expense box" subtitle={`Line items exactly as filled on the paper sheet's expense box. Diesel amount auto-fills from litres × the org rate${dieselRate ? ` (₹${dieselRate}/L)` : ''}, and stays editable.`}>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
           {EXPENSE_FIELDS.map((k) => (
             <div key={k}>
-              <span className="label-field">{prettify(k)}</span>
+              <span className="label-field">{k === 'dieselLitres' ? 'Diesel (litres)' : k === 'diesel' ? 'Diesel amount' : prettify(k)}</span>
               <input
                 type="number" step="0.01" className="input-field"
                 value={expenseForm[k] ?? ''}
-                onChange={(e) => setExpenseForm({ ...expenseForm, [k]: e.target.value })}
+                onChange={(e) => setExpenseField(k, e.target.value)}
               />
             </div>
           ))}
@@ -335,9 +396,21 @@ export default function TripDetail() {
           ))}
         </div>
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <button onClick={saveSummary} disabled={savingSummary} className="btn-accent rounded px-4 py-2 text-sm disabled:opacity-60">
-            {savingSummary ? 'Saving…' : 'Save summary box'}
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={saveSummary} disabled={savingSummary} className="btn-accent rounded px-4 py-2 text-sm disabled:opacity-60">
+              {savingSummary ? 'Saving…' : 'Save summary box'}
+            </button>
+            {trip.summary?.profitLoss !== undefined && trip.summary?.profitLoss !== null && (
+              <>
+                <button onClick={() => downloadExport('pdf')} disabled={Boolean(exporting)} className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded border border-line text-steel hover:text-ink disabled:opacity-60">
+                  <Download className="w-4 h-4" /> {exporting === 'pdf' ? 'Preparing…' : 'Download PDF'}
+                </button>
+                <button onClick={() => downloadExport('excel')} disabled={Boolean(exporting)} className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded border border-line text-steel hover:text-ink disabled:opacity-60">
+                  <FileSpreadsheet className="w-4 h-4" /> {exporting === 'excel' ? 'Preparing…' : 'Download Excel'}
+                </button>
+              </>
+            )}
+          </div>
           {summaryForm.profitLoss !== undefined && summaryForm.profitLoss !== '' && (
             <Badge tone={Number(summaryForm.profitLoss) < 0 ? 'negative' : 'positive'}>
               P/L ₹{Number(summaryForm.profitLoss).toLocaleString('en-IN')}
