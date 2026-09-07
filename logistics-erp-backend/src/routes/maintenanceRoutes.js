@@ -1,26 +1,14 @@
-const express = require("express");
-const router = express.Router();
-const {
-  getMaintenances,
-  getMaintenance,
-  createMaintenance,
-  updateMaintenance,
-  deleteMaintenance,
-  getAlerts,
-  uploadInvoice,
-} = require("../controllers/maintenanceController");
-const { protect, authorize, requirePermission } = require("../middlewares/auth");
-const { upload, setUploadFolder } = require("../middlewares/upload");
+import { Router } from "express";
+import { listMaintenance, createMaintenance } from "../controllers/maintenanceController.js";
+import { requireAuth, requireScope } from "../middleware/auth.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { ROLES, EMPLOYEE_CATEGORIES } from "../config/roles.js";
 
-router.use(protect, requirePermission("maintenance"));
+const router = Router();
+const canAccess = requireScope(ROLES.ADMIN, ROLES.CO_ADMIN, EMPLOYEE_CATEGORIES.VEHICLE_MASTER);
 
-router.get("/", getMaintenances);
-router.get("/alerts", getAlerts);
-router.get("/:id", getMaintenance);
-router.post("/", createMaintenance);
-router.put("/:id", updateMaintenance);
-router.delete("/:id", authorize("admin"), deleteMaintenance);
+router.use(requireAuth, canAccess);
+router.get("/", asyncHandler(listMaintenance));
+router.post("/", asyncHandler(createMaintenance));
 
-router.post("/:id/invoice", setUploadFolder("maintenance"), upload.single("file"), uploadInvoice);
-
-module.exports = router;
+export default router;

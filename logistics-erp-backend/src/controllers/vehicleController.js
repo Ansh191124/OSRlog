@@ -1,194 +1,165 @@
-const asyncHandler = require("express-async-handler");
-const { Vehicle, Driver, Trip } = require("../models");
-const { getFileUrl } = require("../middlewares/upload");
-const { getPagination, paginationMeta } = require("../utils/api");
-const {
-  vehicleTripFilter,
-  summarizeTrips,
-  attachPerformanceToVehicles,
-} = require("../utils/tripPerformance");
+import Vehicle from "../models/Vehicle.js";
+import User from "../models/User.js";
+import { ROLES, EMPLOYEE_CATEGORIES } from "../config/roles.js";
 
-const tripListFields = "tripCode vehicle vehicleNoText driver driverNameText startDate endDate status summary";
-
-const getVehicles = asyncHandler(async (req, res) => {
-  const { status, search, includePerformance } = req.query;
-  const { page, limit, skip } = getPagination(req.query);
-  const where = {};
-  if (req.user.role === "employee") where.assignedEmployee = req.user._id;
-  if (status) where.status = status;
-  if (search) {
-    where.$or = [
-      { vehicleNo: { $regex: search, $options: "i" } },
-      { modelName: { $regex: search, $options: "i" } },
-      { chassisNumber: { $regex: search, $options: "i" } },
-    ];
+export async function listVehicles(req, res) {
+  const filter = {};
+  // Vehicle Master only sees vehicles assigned to them ("mine" scope).
+  if (req.scope === EMPLOYEE_CATEGORIES.VEHICLE_MASTER) {
+    filter.assignedVehicleMaster = req.user._id;
+  } else if (req.scope === ROLES.DRIVER) {
+    filter.currentDriver = req.user._id;
   }
 
-  const [rows, count] = await Promise.all([
-    Vehicle.find(where).populate("assignedEmployee", "name role").sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
-    Vehicle.countDocuments(where),
-  ]);
+  const vehicles = await Vehicle.find(filter)
+    .populate("assignedVehicleMaster", "name email")
+    .populate("currentDriver", "name email")
+    .sort({ createdAt: -1 });
+  res.json({ vehicles });
+}
 
-  let data = rows;
-  if (includePerformance === "true" && rows.length) {
-    const trips = await Trip.find({}, "vehicle vehicleNoText summary").lean();
-    data = attachPerformanceToVehicles(rows, trips);
+export async function createVehicle(req, res) {
+  const {
+    registrationNumber,
+    type,
+    capacity,
+    baseLocation,
+    rcNumber,
+    rcPhotoKey,
+    ownershipType,
+    ownerName,
+    odometerReading,
+    tyreCount,
+    vehicleDimension,
+  } = req.body;
+  if (!registrationNumber) {
+    return res.status(400).json({ message: "registrationNumber is required" });
   }
 
-  res.json({
-    success: true,
-    data,
-    pagination: paginationMeta(count, page, limit),
+  const isThirdParty = ownershipType === "third_party";
+  const vehicle = await Vehicle.create({
+    registrationNumber: registrationNumber.trim().toUpperCase(),
+    type,
+    capacity,
+    baseLocation,
+    rcNumber,
+    rcPhotoKey,
+    ownershipType: isThirdParty ? "third_party" : "company",
+    // Per doc: if Third Party, owner details aren't collected.
+    ownerName: isThirdParty ? undefined : ownerName,
+    odometerReading: odometerReading || 0,
+    tyreCount: tyreCount ?? null,
+    vehicleDimension,
   });
-});
+  res.status(201).json({ vehicle });
+}
 
-const getVehiclePerformance = asyncHandler(async (req, res) => {
-  const vehicle = await Vehicle.findById(req.params.id).populate("assignedEmployee", "name role").lean();
-  if (!vehicle) {
-    res.status(404);
-    throw new Error("Vehicle not found");
-  }
-  if (req.user.role === "employee" && String(vehicle.assignedEmployee?._id) !== String(req.user._id)) {
-    res.status(403);
-    throw new Error("This vehicle is not assigned to you");
-  }
+export async function updateVehicle(req, res) {
+  const { id } = req.params;
+  const {
+    registrationNumber,
+    type,
+    capacity,
+    baseLocation,
+    status,
+    currentDriver,
+    rcNumber,
+    rcPhotoKey,
+    ownershipType,
+    ownerName,
+    odometerReading,
+    tyreCount,
+    vehicleDimension,
+  } = req.body;
 
-  const trips = await Trip.find(vehicleTripFilter(vehicle), tripListFields)
-    .populate("driver", "name phone")
-    .sort({ startDate: -1, createdAt: -1 })
-    .lean();
+  const vehicle = await Vehicle.findById(id);
+  if (!vehicle) return res.status(404).json({ message: "Vehicle not found" });
 
-  res.json({
-    success: true,
-    data: {
-      vehicle,
-      summary: summarizeTrips(trips),
-      trips,
-    },
-  });
-});
-
-const getVehicle = asyncHandler(async (req, res) => {
-  const vehicle = await Vehicle.findById(req.params.id).populate("assignedEmployee", "name role");
-  if (!vehicle) {
-    res.status(404);
-    throw new Error("Vehicle not found");
-  }
-  if (req.user.role === "employee" && String(vehicle.assignedEmployee?._id) !== String(req.user._id)) {
-    res.status(403);
-    throw new Error("This vehicle is not assigned to you");
-  }
-  const drivers = await Driver.find({ assignedVehicle: vehicle._id }).select("name phone");
-  res.json({ success: true, data: { ...vehicle.toJSON(), drivers } });
-});
-
-const createVehicle = asyncHandler(async (req, res) => {
-  if (!req.body.vehicleNo || !req.body.vehicleType || !req.body.modelName) {
-    res.status(400);
-    throw new Error("vehicle number, type and model are required");
-  }
-  const payload = { ...req.body, createdBy: req.user._id };
-  const vehicle = await Vehicle.create(payload);
-  res.status(201).json({ success: true, data: vehicle });
-});
-
-// Employees manage the day-to-day condition of the vehicles assigned to them
-// (status, odometer, remark) but only an admin/co-admin can reassign a vehicle
-// to a different employee or edit its mandatory identity fields.
-const EMPLOYEE_EDITABLE_FIELDS = ["status", "remark", "currentOdometer"];
-
-const updateVehicle = asyncHandler(async (req, res) => {
-  const existing = await Vehicle.findById(req.params.id);
-  if (!existing) {
-    res.status(404);
-    throw new Error("Vehicle not found");
-  }
-
-  let payload = req.body;
-  if (req.user.role === "employee") {
-    if (String(existing.assignedEmployee) !== String(req.user._id)) {
-      res.status(403);
-      throw new Error("You can only update the status of vehicles assigned to you");
+  // Vehicle Master may only touch their own assigned vehicles.
+  if (req.scope === EMPLOYEE_CATEGORIES.VEHICLE_MASTER) {
+    if (!vehicle.assignedVehicleMaster || String(vehicle.assignedVehicleMaster) !== String(req.user._id)) {
+      return res.status(403).json({ message: "Not your assigned vehicle" });
     }
-    payload = Object.fromEntries(Object.entries(req.body).filter(([key]) => EMPLOYEE_EDITABLE_FIELDS.includes(key)));
   }
 
-  const vehicle = await Vehicle.findByIdAndUpdate(req.params.id, payload, {
-    new: true,
-    runValidators: true,
+  if (registrationNumber) vehicle.registrationNumber = registrationNumber.trim().toUpperCase();
+  if (type !== undefined) vehicle.type = type;
+  if (capacity !== undefined) vehicle.capacity = capacity;
+  if (baseLocation !== undefined) vehicle.baseLocation = baseLocation;
+  if (status) vehicle.status = status;
+  if (currentDriver !== undefined) vehicle.currentDriver = currentDriver || null;
+  if (rcNumber !== undefined) vehicle.rcNumber = rcNumber;
+  if (rcPhotoKey !== undefined) vehicle.rcPhotoKey = rcPhotoKey;
+  if (ownershipType !== undefined) {
+    vehicle.ownershipType = ownershipType === "third_party" ? "third_party" : "company";
+    if (vehicle.ownershipType === "third_party") vehicle.ownerName = undefined;
+  }
+  if (ownerName !== undefined && vehicle.ownershipType !== "third_party") vehicle.ownerName = ownerName;
+  if (odometerReading !== undefined) vehicle.odometerReading = odometerReading;
+  if (tyreCount !== undefined) vehicle.tyreCount = tyreCount;
+  if (vehicleDimension !== undefined) vehicle.vehicleDimension = vehicleDimension;
+
+  await vehicle.save();
+  res.json({ vehicle });
+}
+
+// Driver: "Update vehicle Status" — report their own vehicle as available or
+// needing maintenance. Other statuses (on_trip/inactive) are system/admin controlled.
+export async function driverUpdateVehicleStatus(req, res) {
+  const { id } = req.params;
+  const { status } = req.body;
+  if (!["available", "maintenance"].includes(status)) {
+    return res.status(400).json({ message: "status must be 'available' or 'maintenance'" });
+  }
+
+  const vehicle = await Vehicle.findById(id);
+  if (!vehicle || !vehicle.currentDriver || String(vehicle.currentDriver) !== String(req.user._id)) {
+    return res.status(403).json({ message: "Not your current vehicle" });
+  }
+
+  vehicle.status = status;
+  await vehicle.save();
+  res.json({ vehicle });
+}
+
+// Co-Admin/Admin: assign a batch of vehicles to one Vehicle Master in one call.
+export async function bulkAssignVehicles(req, res) {
+  const { vehicleIds, vehicleMasterId } = req.body;
+  if (!Array.isArray(vehicleIds) || vehicleIds.length === 0 || !vehicleMasterId) {
+    return res.status(400).json({ message: "vehicleIds (non-empty array) and vehicleMasterId are required" });
+  }
+
+  const vehicleMaster = await User.findOne({
+    _id: vehicleMasterId,
+    role: ROLES.EMPLOYEE,
+    employeeCategory: EMPLOYEE_CATEGORIES.VEHICLE_MASTER,
   });
-  if (!vehicle) {
-    res.status(404);
-    throw new Error("Vehicle not found");
-  }
-  res.json({ success: true, data: vehicle });
-});
+  if (!vehicleMaster) return res.status(404).json({ message: "Vehicle Master not found" });
 
-const deleteVehicle = asyncHandler(async (req, res) => {
-  const vehicle = await Vehicle.findByIdAndDelete(req.params.id);
-  if (!vehicle) {
-    res.status(404);
-    throw new Error("Vehicle not found");
-  }
-  res.json({ success: true, message: "Vehicle deleted" });
-});
+  await Vehicle.updateMany({ _id: { $in: vehicleIds } }, { assignedVehicleMaster: vehicleMaster._id });
+  const vehicles = await Vehicle.find({ _id: { $in: vehicleIds } });
+  res.json({ vehicles });
+}
 
-// Vehicles nearing document expiry - useful for dashboards/alerts
-const getExpiringDocuments = asyncHandler(async (req, res) => {
-  const days = Number(req.query.days) || 30;
-  const today = new Date();
-  const future = new Date();
-  future.setDate(today.getDate() + days);
+// Co-Admin/Admin: per-Vehicle-Master vehicle counts and statuses.
+export async function vehicleAssignOverview(req, res) {
+  const vehicleMasters = await User.find({
+    role: ROLES.EMPLOYEE,
+    employeeCategory: EMPLOYEE_CATEGORIES.VEHICLE_MASTER,
+  }).select("name email");
 
-  const fields = ["rcExpiry", "insuranceExpiry", "permitExpiry", "fitnessExpiry", "pucExpiry"];
-  const orConditions = fields.map((f) => ({ [f]: { $gte: today, $lte: future } }));
+  const vehicles = await Vehicle.find().select("registrationNumber status assignedVehicleMaster");
 
-  const vehicles = await Vehicle.find({ $or: orConditions });
-  res.json({ success: true, data: vehicles });
-});
+  const byMaster = vehicleMasters.map((vm) => {
+    const assigned = vehicles.filter((v) => String(v.assignedVehicleMaster) === String(vm._id));
+    return {
+      vehicleMaster: { _id: vm._id, name: vm.name, email: vm.email },
+      vehicleCount: assigned.length,
+      vehicles: assigned.map((v) => ({ _id: v._id, registrationNumber: v.registrationNumber, status: v.status })),
+    };
+  });
 
-const uploadVehiclePhoto = asyncHandler(async (req, res) => {
-  const vehicle = await Vehicle.findById(req.params.id);
-  if (!vehicle) {
-    res.status(404);
-    throw new Error("Vehicle not found");
-  }
-  if (!req.file) {
-    res.status(400);
-    throw new Error("No file uploaded");
-  }
-  const url = getFileUrl(req, req.file);
-  vehicle.photoUrl = url;
-  await vehicle.save();
-  res.json({ success: true, data: { photoUrl: url } });
-});
+  const unassigned = vehicles.filter((v) => !v.assignedVehicleMaster);
 
-const uploadVehicleDoc = asyncHandler(async (req, res) => {
-  const vehicle = await Vehicle.findById(req.params.id);
-  if (!vehicle) {
-    res.status(404);
-    throw new Error("Vehicle not found");
-  }
-  if (!req.file) {
-    res.status(400);
-    throw new Error("No file uploaded");
-  }
-  const url = getFileUrl(req, req.file);
-  const docType = req.body.docType; // "rc" | "insurance"
-  if (docType === "insurance") vehicle.insuranceDocUrl = url;
-  else vehicle.rcDocUrl = url;
-  await vehicle.save();
-  res.json({ success: true, data: { url, docType: docType || "rc" } });
-});
-
-module.exports = {
-  getVehicles,
-  getVehicle,
-  getVehiclePerformance,
-  createVehicle,
-  updateVehicle,
-  deleteVehicle,
-  getExpiringDocuments,
-  uploadVehiclePhoto,
-  uploadVehicleDoc,
-};
+  res.json({ byMaster, unassigned });
+}

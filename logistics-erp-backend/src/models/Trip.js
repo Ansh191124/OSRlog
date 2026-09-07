@@ -1,162 +1,124 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
+
 const { Schema } = mongoose;
 
-/**
- * One row per trip-leg, matching the repeating table rows in the sheet:
- * DATE | PARTY NAME | FROM | TO | FREIGHT | ODOMETER | ADV | DIESEL | AMT
- * Embedded as a subdocument array on Trip - MongoDB has no separate join table.
- */
-const tripEntrySchema = new Schema(
+const tripLogSchema = new Schema(
   {
-    date: { type: Date },
-    partyName: { type: String },
-    fromLocation: { type: String },
-    toLocation: { type: String },
-    freight: { type: Number },
-    odometer: { type: Number },
-    adv: { type: Number }, // can be negative e.g. -10000 (submitted)
-    diesel: { type: Number }, // litres
-    amt: { type: Number },
-  },
-  { timestamps: true, _id: true }
-);
-
-/**
- * Matches the "EXPENSE" box on the sheet:
- * DALA, BORDER, POLICE, GREASE+AIR, GUIDE, PARKING, FOODING,
- * UREA NAGAD, KIRAYA, TOLL TAX, DIESEL, SALARY, INCENTIVE, UREA, LABOUR
- */
-const tripExpenseSchema = new Schema(
-  {
-    dala: { type: Number },
-    border: { type: Number },
-    police: { type: Number },
-    greaseAir: { type: Number },
-    guide: { type: Number },
-    parking: { type: Number },
-    fooding: { type: Number },
-    ureaNagad: { type: Number },
-    kiraya: { type: Number },
-    tollTax: { type: Number },
-    dieselLitres: { type: Number }, // auto-multiplies by OrgSettings.dieselRate to suggest `diesel` below
-    diesel: { type: Number }, // amount - auto-filled from dieselLitres, but always manually overridable
-    salary: { type: Number },
-    incentive: { type: Number },
-    urea: { type: Number },
-    labour: { type: Number },
-    otherExpense: { type: Number },
-    otherExpenseLabel: { type: String },
-  },
-  { _id: false }
-);
-
-/**
- * Matches the right-hand summary box and the bottom-left
- * "TANK FULL / FREIGHT / EXPENSES / P/L" box.
- *
- * IMPORTANT: every value here is manually entered, exactly like the paper
- * sheet - nothing is auto-calculated by force. The POST /api/trips/:id/calculate
- * helper endpoint can *suggest* values, but staff can overwrite anything before saving.
- */
-const tripSummarySchema = new Schema(
-  {
-    drAdv: { type: Number },
-    expenseTotal: { type: Number },
-    total: { type: Number },
-
-    gpsKm: { type: Number },
-    mtrKm: { type: Number },
-    diffKm: { type: Number },
-
-    totalDieselLitres: { type: Number },
-    totalDieselAmount: { type: Number },
-
-    costPerKm: { type: Number },
-    mileage: { type: Number },
-    expensePercent: { type: Number },
-    freightPerKm: { type: Number },
-    plPerDay: { type: Number },
-    days: { type: Number },
-
-    tankFullLitres: { type: Number },
-    tankFullAmount: { type: Number },
-    tankFullDate: { type: Date },
-    tankFullTime: { type: String },
-
-    freightTotal: { type: Number },
-    expensesTotal: { type: Number }, // shown negative on sheet
-    profitLoss: { type: Number },
-  },
-  { _id: false }
-);
-
-/**
- * Maps to the header section of the physical "TRIP SHEET":
- * VEHICLE NO / DRIVER NAME / START DATE / END DATE / TIME IN / TIME OUT
- *
- * vehicle/driver link to master collections (optional), while
- * vehicleNoText/driverNameText store the manually typed value exactly like
- * the paper sheet, in case staff types a vehicle/driver not yet in the master list.
- */
-const driverChangeSchema = new Schema(
-  {
-    driver: { type: Schema.Types.ObjectId, ref: "Driver" },
-    driverNameText: { type: String },
-    effectiveAt: { type: Date },
-    reason: { type: String },
-    recordedBy: { type: Schema.Types.ObjectId, ref: "User" },
-  },
-  { timestamps: true, _id: true }
-);
-
-const tripSchema = new Schema(
-  {
-    tripCode: { type: String, unique: true, sparse: true }, // e.g. TRIP-000123
-
-    vehicle: { type: Schema.Types.ObjectId, ref: "Vehicle" },
-    vehicleNoText: { type: String },
-
-    driver: { type: Schema.Types.ObjectId, ref: "Driver" },
-    driverNameText: { type: String },
-
-    driverChanges: [driverChangeSchema],
-
-    startDate: { type: Date },
-    endDate: { type: Date },
-    timeIn: { type: String }, // stored as text e.g. "7:48 PM" to match manual entry
-    timeOut: { type: String },
-
-    status: { type: String, enum: ["ongoing", "completed", "cancelled"], default: "ongoing" },
-
-    remark: { type: String }, // e.g. "RS.10000 SUBMIT TO AMIT[5679],ADV"
-
-    entries: [tripEntrySchema],
-    expense: { type: tripExpenseSchema, default: () => ({}) },
-    summary: { type: tripSummarySchema, default: () => ({}) },
-
-    createdBy: { type: Schema.Types.ObjectId, ref: "User" },
+    status: { type: String, trim: true },
+    note: { type: String, trim: true },
     updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    at: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
 
-    // LR (Lorry Receipt) request flow: a client creates one of these against an
-    // approved Fleet quota, uploads a photo of the physical LR paper, and it
-    // waits here until admin/co-admin approves it (assigning a vehicle) or
-    // rejects it. Left undefined entirely for trips staff create directly.
-    fleet: { type: Schema.Types.ObjectId, ref: "Fleet" },
-    lrNumber: { type: String, trim: true },
-    lrPhotoUrl: { type: String },
-    lrFromLocation: { type: String, trim: true }, // where the client's goods are picked up from
-    lrToLocation: { type: String, trim: true }, // where they're being delivered to
-    lrGoodsDescription: { type: String, trim: true }, // what's being carried, e.g. "50 bags cement"
-    requestStatus: { type: String, enum: ["requested", "approved", "rejected"] },
-    requestedBy: { type: Schema.Types.ObjectId, ref: "User" },
+// One LR/leg of a (possibly multi-leg) trip — "the vehicle master can add
+// multiple LRs" to a single running trip as it progresses through legs.
+const legSchema = new Schema(
+  {
+    lorryReceipt: { type: Schema.Types.ObjectId, ref: "LorryReceipt", required: true },
+    fromLocation: { type: String, trim: true },
+    toLocation: { type: String, trim: true },
+    freight: { type: Number, default: 0 },
+    odometerReading: { type: Number, default: null },
+    advance: { type: Number, default: 0 },
+    date: { type: Date, default: Date.now },
+    addedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    deliveredAt: { type: Date, default: null },
+    deliveredBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
   },
   { timestamps: true }
 );
 
-tripSchema.index({ tripCode: "text", vehicleNoText: "text", driverNameText: "text", lrNumber: "text" });
-tripSchema.index({ vehicle: 1 });
-tripSchema.index({ driver: 1 });
-tripSchema.index({ startDate: -1 });
-tripSchema.index({ fleet: 1 });
+// Fixed expense categories matching the physical Trip Sheet ledger.
+export const TRIP_EXPENSE_CATEGORIES = [
+  "Dala",
+  "Border",
+  "Police",
+  "Grease+Air",
+  "Guide",
+  "Parking",
+  "Fooding",
+  "Urea Nagad",
+  "Kiraya",
+  "Toll Tax",
+  "Diesel",
+  "Salary",
+  "Incentive",
+  "Urea",
+  "Labour",
+];
 
-module.exports = mongoose.model("Trip", tripSchema);
+const expenseSchema = new Schema(
+  {
+    category: { type: String, enum: TRIP_EXPENSE_CATEGORIES, required: true },
+    amount: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
+const tripSchema = new Schema(
+  {
+    legs: { type: [legSchema], default: [] },
+
+    vehicle: { type: Schema.Types.ObjectId, ref: "Vehicle", required: true },
+    driver: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    vehicleMaster: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+
+    status: {
+      type: String,
+      enum: ["created", "running", "completed", "closed"],
+      default: "created",
+    },
+
+    startDate: { type: Date, default: Date.now },
+    endDate: { type: Date, default: null },
+    timeIn: { type: String, trim: true },
+    timeOut: { type: String, trim: true },
+
+    // Diesel/mileage are reported once per trip (not per leg), per the trip sheet.
+    dieselLiters: { type: Number, default: 0 },
+    dieselPricePerLiter: { type: Number, default: 0 },
+    dieselTotalCost: { type: Number, default: 0 },
+    distanceKm: { type: Number, default: 0 }, // odometer-measured
+    gpsKm: { type: Number, default: 0 }, // manual entry — no live GPS integration
+    mileage: { type: Number, default: 0 },
+
+    lrRate: { type: Number, default: 0 },
+    freightRate: { type: Number, default: 0 }, // trip-wide total, sums legs' freight when filled
+
+    expenses: { type: [expenseSchema], default: [] },
+
+    logs: { type: [tripLogSchema], default: [] },
+
+    closedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    closedAt: { type: Date, default: null },
+
+    // If this trip's LRs still have an outstanding Loading Slip balance when
+    // the Vehicle Master tries to close it, they must submit what the client
+    // paid at delivery for Accountant verification first — mirrors the
+    // Loading Slip payment flow (cash skips proof, else proof required).
+    // The trip only actually closes once this is verified.
+    closurePayment: {
+      status: { type: String, enum: ["none", "pending_verification", "verified", "rejected"], default: "none" },
+      amount: { type: Number, default: 0 },
+      paymentMethod: { type: String, enum: ["cash", "online", "upi", "bank_transfer", "cheque", null], default: null },
+      proofUrl: { type: String, default: null },
+      submittedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+      submittedAt: { type: Date, default: null },
+      verifiedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+      verifiedAt: { type: Date, default: null },
+      rejectionReason: { type: String, default: null },
+    },
+  },
+  { timestamps: true }
+);
+
+tripSchema.pre("save", function computeDerived(next) {
+  this.dieselTotalCost = Number((this.dieselLiters * this.dieselPricePerLiter).toFixed(2));
+  this.mileage = this.dieselLiters > 0 ? Number((this.distanceKm / this.dieselLiters).toFixed(2)) : 0;
+  next();
+});
+
+export default mongoose.model("Trip", tripSchema);

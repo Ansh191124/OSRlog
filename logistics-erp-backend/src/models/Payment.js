@@ -1,53 +1,30 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
+
 const { Schema } = mongoose;
 
+// Driver expense/payment requests -> Vehicle Master approval -> Accountant execution
 const paymentSchema = new Schema(
   {
-    trip: { type: Schema.Types.ObjectId, ref: "Trip" },
-    vehicle: { type: Schema.Types.ObjectId, ref: "Vehicle" },
-    driver: { type: Schema.Types.ObjectId, ref: "Driver" },
-    fleet: { type: Schema.Types.ObjectId, ref: "Fleet" },
+    requestedBy: { type: Schema.Types.ObjectId, ref: "User", required: true }, // driver
+    trip: { type: Schema.Types.ObjectId, ref: "Trip", default: null },
+    reason: { type: String, trim: true, required: true },
+    amount: { type: Number, required: true },
+    mode: { type: String, enum: ["cash", "online"], default: "cash" },
 
-    partyName: { type: String },
-    date: { type: Date },
-
-    direction: { type: String, enum: ["received", "paid"] }, // received = money in, paid = money out
-
-    category: {
+    status: {
       type: String,
-      enum: ["freight", "advance", "expense", "salary", "maintenance", "fuel", "fleet_reservation", "other"],
+      enum: ["pending_vehicle_master", "approved_by_vehicle_master", "rejected", "paid"],
+      default: "pending_vehicle_master",
     },
 
-    paymentType: { type: String, enum: ["cash", "online"] },
-    paymentMode: {
-      type: String,
-      enum: ["cash", "upi", "bank_transfer", "cheque", "card", "other"],
-    },
-    transactionRef: { type: String },
-    bankName: { type: String },
+    vehicleMasterApprovedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    vehicleMasterApprovedAt: { type: Date, default: null },
 
-    // For cash fleet payments: who the client says they physically paid.
-    paidToName: { type: String },
-
-    amount: { type: Number },
-
-    // "pending" = client-submitted, awaiting accountant verification.
-    status: { type: String, enum: ["pending", "completed", "failed"], default: "completed" },
-    verifiedBy: { type: Schema.Types.ObjectId, ref: "User" },
-    verifiedAt: { type: Date },
-
-    receiptUrl: { type: String },
-    remark: { type: String },
-    createdBy: { type: Schema.Types.ObjectId, ref: "User" },
+    paidBy: { type: Schema.Types.ObjectId, ref: "User", default: null }, // accountant
+    paidAt: { type: Date, default: null },
+    proofUrl: { type: String, default: null },
   },
   { timestamps: true }
 );
 
-paymentSchema.index({ paymentType: 1, direction: 1 });
-paymentSchema.index({ date: -1 });
-paymentSchema.index({ trip: 1 });
-paymentSchema.index({ vehicle: 1 });
-paymentSchema.index({ driver: 1 });
-paymentSchema.index({ partyName: "text", transactionRef: "text" });
-
-module.exports = mongoose.model("Payment", paymentSchema);
+export default mongoose.model("Payment", paymentSchema);

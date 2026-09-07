@@ -1,46 +1,45 @@
-const express = require("express");
-const router = express.Router();
-const {
-  getTrips,
+import { Router } from "express";
+import {
+  listTrips,
   getTrip,
-  createTrip,
+  assignVehicleToLorryReceipt,
+  addLegToTrip,
+  markLegDelivered,
   updateTrip,
+  closeTrip,
+  submitClosingPayment,
+  verifyClosingPayment,
+  downloadTripSheetPdf,
   deleteTrip,
-  addTripEntry,
-  updateTripEntry,
-  deleteTripEntry,
-  upsertTripExpense,
-  upsertTripSummary,
-  calculateTripSummary,
-  addDriverChange,
-  exportTrip,
-  uploadLrPhoto,
-} = require("../controllers/tripController");
-const { protect, authorize, requirePermission, requireAnyPermission } = require("../middlewares/auth");
-const { upload, setUploadFolder } = require("../middlewares/upload");
+} from "../controllers/tripController.js";
+import { requireAuth, requireScope } from "../middleware/auth.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { ROLES, EMPLOYEE_CATEGORIES } from "../config/roles.js";
 
-router.use(protect);
+const router = Router();
+const canView = requireScope(
+  ROLES.ADMIN,
+  ROLES.CO_ADMIN,
+  EMPLOYEE_CATEGORIES.VEHICLE_MASTER,
+  EMPLOYEE_CATEGORIES.ACCOUNTANT,
+  ROLES.DRIVER
+);
+const canManage = requireScope(ROLES.ADMIN, ROLES.CO_ADMIN, EMPLOYEE_CATEGORIES.VEHICLE_MASTER);
+const vehicleMasterOnly = requireScope(EMPLOYEE_CATEGORIES.VEHICLE_MASTER);
+const adminOrCoAdmin = requireScope(ROLES.ADMIN, ROLES.CO_ADMIN);
+const accountantOnly = requireScope(EMPLOYEE_CATEGORIES.ACCOUNTANT);
 
-// Staff (trips) and clients creating/viewing their own LR's (fleets) both need these.
-const staffOrClient = requireAnyPermission("trips", "fleets");
-router.get("/", staffOrClient, getTrips);
-router.get("/:id", staffOrClient, getTrip);
-router.post("/", staffOrClient, createTrip);
-router.post("/:id/lr-photo", staffOrClient, setUploadFolder("trips"), upload.single("file"), uploadLrPhoto);
+router.use(requireAuth);
+router.get("/", canView, asyncHandler(listTrips));
+router.post("/assign", vehicleMasterOnly, asyncHandler(assignVehicleToLorryReceipt));
+router.get("/:id", canView, asyncHandler(getTrip));
+router.get("/:id/pdf", canView, asyncHandler(downloadTripSheetPdf));
+router.post("/:id/legs", vehicleMasterOnly, asyncHandler(addLegToTrip));
+router.post("/:id/legs/:legId/deliver", vehicleMasterOnly, asyncHandler(markLegDelivered));
+router.patch("/:id", canManage, asyncHandler(updateTrip));
+router.post("/:id/close", vehicleMasterOnly, asyncHandler(closeTrip));
+router.patch("/:id/submit-closing-payment", vehicleMasterOnly, asyncHandler(submitClosingPayment));
+router.patch("/:id/verify-closing-payment", accountantOnly, asyncHandler(verifyClosingPayment));
+router.delete("/:id", adminOrCoAdmin, asyncHandler(deleteTrip));
 
-// Everything below is the actual trip sheet - staff only, clients never touch it.
-router.get("/:id/export", requirePermission("trips"), exportTrip);
-router.put("/:id", requirePermission("trips"), updateTrip);
-router.delete("/:id", requirePermission("trips"), authorize("admin"), deleteTrip);
-
-router.post("/:id/entries", requirePermission("trips"), addTripEntry);
-router.put("/:id/entries/:entryId", requirePermission("trips"), updateTripEntry);
-router.delete("/:id/entries/:entryId", requirePermission("trips"), deleteTripEntry);
-
-router.put("/:id/expense", requirePermission("trips"), upsertTripExpense);
-router.put("/:id/summary", requirePermission("trips"), upsertTripSummary);
-
-router.post("/:id/calculate", requirePermission("trips"), calculateTripSummary);
-router.post("/:id/driver-changes", requirePermission("trips"), addDriverChange);
-
-module.exports = router;
+export default router;

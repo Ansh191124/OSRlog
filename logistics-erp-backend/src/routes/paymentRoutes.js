@@ -1,28 +1,30 @@
-const express = require("express");
-const router = express.Router();
-const {
-  getPayments,
-  getPayment,
-  createPayment,
-  updatePayment,
-  deletePayment,
-  getPaymentSummary,
-  uploadReceipt,
-  verifyPayment,
-} = require("../controllers/paymentController");
-const { protect, authorize, requirePermission } = require("../middlewares/auth");
-const { upload, setUploadFolder } = require("../middlewares/upload");
+import { Router } from "express";
+import {
+  createPaymentRequest,
+  listPayments,
+  vehicleMasterDecide,
+  accountantPay,
+} from "../controllers/paymentController.js";
+import { requireAuth, requireScope } from "../middleware/auth.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { ROLES, EMPLOYEE_CATEGORIES } from "../config/roles.js";
 
-router.use(protect, requirePermission("payments"));
+const router = Router();
+const driverOnly = requireScope(ROLES.DRIVER);
+const viewers = requireScope(
+  ROLES.DRIVER,
+  EMPLOYEE_CATEGORIES.VEHICLE_MASTER,
+  EMPLOYEE_CATEGORIES.ACCOUNTANT,
+  ROLES.ADMIN,
+  ROLES.CO_ADMIN
+);
+const vehicleMasterOnly = requireScope(EMPLOYEE_CATEGORIES.VEHICLE_MASTER);
+const accountantOnly = requireScope(EMPLOYEE_CATEGORIES.ACCOUNTANT);
 
-router.get("/", getPayments);
-router.get("/summary", getPaymentSummary);
-router.get("/:id", getPayment);
-router.post("/", createPayment);
-router.put("/:id", updatePayment);
-router.delete("/:id", authorize("admin"), deletePayment);
+router.use(requireAuth);
+router.get("/", viewers, asyncHandler(listPayments));
+router.post("/", driverOnly, asyncHandler(createPaymentRequest));
+router.patch("/:id/vehicle-master-decide", vehicleMasterOnly, asyncHandler(vehicleMasterDecide));
+router.patch("/:id/pay", accountantOnly, asyncHandler(accountantPay));
 
-router.post("/:id/receipt", setUploadFolder("payments"), upload.single("file"), uploadReceipt);
-router.put("/:id/verify", authorize("admin", "accountant"), verifyPayment);
-
-module.exports = router;
+export default router;

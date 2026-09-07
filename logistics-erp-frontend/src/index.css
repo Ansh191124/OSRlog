@@ -1,101 +1,70 @@
-@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-display: "Oswald", sans-serif;
-  --font-body: "Inter", sans-serif;
-  --font-mono: "JetBrains Mono", monospace;
+  --font-sans: "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
 
-  --color-asphalt: #14181F;
-  --color-asphalt-2: #1C222C;
-  --color-asphalt-3: #262E3B;
-  --color-paper: #F1F2ED;
-  --color-paper-2: #E8E9E2;
-  --color-ink: #1B1F27;
-  --color-steel: #5B6472;
-  --color-steel-light: #8C93A1;
-  --color-accent: #FF6A13;
-  --color-accent-deep: #C9500A;
-  --color-accent-soft: #FFE4CF;
-  --color-positive: #1F7A5C;
-  --color-positive-soft: #DCEFE7;
-  --color-negative: #C33F3F;
-  --color-negative-soft: #FBE1E1;
-  --color-line: #D9DBD3;
+  /* Neutral surfaces — light, off-white, no dark mode per design direction */
+  --color-background: #f2f4f7;
+  --color-surface: #ffffff;
+  --color-surface-muted: #eceff3;
+  --color-border: #dde1e8;
+
+  --color-text-primary: #16202e;
+  --color-text-secondary: #5c6b7d;
+
+  /* Brand — deep carrier/freight navy (Amazon-Relay-inspired dashboard
+     language: dense data, dark-navy emphasis on actions/active states —
+     but kept light-surfaced per this project's no-dark-mode rule, so navy
+     shows up as accent/emphasis rather than as a dark shell). */
+  --color-brand-50: #eaeef4;
+  --color-brand-100: #d2dbe7;
+  --color-brand-200: #a6b9d0;
+  --color-brand-300: #7996b8;
+  --color-brand-400: #4d729f;
+  --color-brand-500: #2f5580;
+  --color-brand-600: #1d3d63;
+  --color-brand-700: #162f4d;
+  --color-brand-800: #102238;
+
+  /* Accent — warm amber highlight (own hue, not Amazon's exact orange),
+     used sparingly for standout emphasis against the navy/neutral base. */
+  --color-accent-50: #fbf1e0;
+  --color-accent-100: #f4e0ba;
+  --color-accent-300: #e2ac59;
+  --color-accent-500: #c17f28;
+  --color-accent-600: #a3681d;
+
+  /* Muted status colors */
+  --color-success-50: #eaf3ec;
+  --color-success-300: #a2c4ac;
+  --color-success-500: #4f8a5f;
+  --color-success-600: #3c7049;
+
+  --color-warning-50: #f6f0e6;
+  --color-warning-300: #d9bd8b;
+  --color-warning-500: #b3873f;
+  --color-warning-600: #966f30;
+
+  --color-danger-50: #f5eceb;
+  --color-danger-300: #d3a29c;
+  --color-danger-500: #a75b52;
+  --color-danger-600: #8c4841;
 }
 
-@layer base {
-  html, body, #root {
-    height: 100%;
-  }
-  body {
-    background: var(--color-paper);
-    color: var(--color-ink);
-    font-family: var(--font-body);
-    -webkit-font-smoothing: antialiased;
-  }
-  h1, h2, h3, h4, .font-display {
-    font-family: var(--font-display);
-    letter-spacing: 0.01em;
-  }
-  .tabular {
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-  }
-  ::selection {
-    background: var(--color-accent-soft);
-  }
-  *:focus-visible {
-    outline: 2px solid var(--color-accent);
-    outline-offset: 2px;
-  }
+* {
+  box-sizing: border-box;
 }
 
-@layer components {
-  .card {
-    background: #fff;
-    border: 1px solid var(--color-line);
-    border-radius: 4px;
-  }
-  .route-dashes {
-    background-image: repeating-linear-gradient(to bottom, var(--color-steel-light) 0 6px, transparent 6px 14px);
-    width: 2px;
-  }
-  .sidebar-scroll { scrollbar-width: none; }
-  .sidebar-scroll::-webkit-scrollbar { display: none; }
-  .btn-accent {
-    background: var(--color-accent);
-    color: #fff;
-    font-weight: 600;
-    transition: background-color .15s ease;
-  }
-  .btn-accent:hover { background: var(--color-accent-deep); }
-
-  .input-field {
-    background: #fff;
-    border: 1px solid var(--color-line);
-    border-radius: 3px;
-    padding: 0.55rem 0.7rem;
-    font-size: 0.875rem;
-    color: var(--color-ink);
-    width: 100%;
-  }
-  .input-field:focus {
-    border-color: var(--color-accent);
-    outline: none;
-    box-shadow: 0 0 0 3px var(--color-accent-soft);
-  }
-  .label-field {
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--color-steel);
-    margin-bottom: 0.3rem;
-    display: block;
-  }
+html,
+body,
+#root {
+  height: 100%;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  background: var(--color-background);
+  -webkit-font-smoothing: antialiased;
 }

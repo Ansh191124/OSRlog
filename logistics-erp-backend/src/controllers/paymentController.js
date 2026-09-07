@@ -1,240 +1,165 @@
-const asyncHandler = require("express-async-handler");
-const { Payment, Fleet } = require("../models");
-const { getFileUrl } = require("../middlewares/upload");
-const { getPagination, paginationMeta, endOfDay } = require("../utils/api");
+import Payment from "../models/Payment.js";
+import LedgerEntry from "../models/LedgerEntry.js";
+import Vehicle from "../models/Vehicle.js";
+import { notifyUser, notifyAccountants } from "../utils/notify.js";
+import { recordAudit } from "../utils/audit.js";
+import { ROLES, EMPLOYEE_CATEGORIES } from "../config/roles.js";
 
-const getPayments = asyncHandler(async (req, res) => {
-  const {
-    paymentType, direction, category, status, vehicleId, driverId, tripId, fleetId,
-    from, to, search,
-  } = req.query;
+const PAYMENT_POPULATE = [
+  { path: "requestedBy", select: "name email" },
+  { path: "trip", select: "fromLocation toLocation" },
+  { path: "vehicleMasterApprovedBy", select: "name" },
+  { path: "paidBy", select: "name" },
+];
 
-  const where = {};
-  // Clients only ever see the payments they themselves submitted (their fleet
-  // reservations) - never the company-wide cashbook.
-  if (req.user.role === "client") where.createdBy = req.user._id;
-  if (paymentType) where.paymentType = paymentType;
-  if (direction) where.direction = direction;
-  if (category) where.category = category;
-  if (status) where.status = status;
-  if (vehicleId) where.vehicle = vehicleId;
-  if (driverId) where.driver = driverId;
-  if (tripId) where.trip = tripId;
-  if (fleetId) where.fleet = fleetId;
-  if (from || to) {
-    where.date = {};
-    if (from) where.date.$gte = new Date(from);
-    if (to) where.date.$lte = endOfDay(to);
-  }
-  if (search) {
-    where.$or = [
-      { partyName: { $regex: search, $options: "i" } },
-      { transactionRef: { $regex: search, $options: "i" } },
-    ];
-  }
-
-  const { page, limit, skip } = getPagination(req.query);
-  const [rows, count] = await Promise.all([
-    Payment.find(where)
-      .populate("trip", "tripCode")
-      .populate("vehicle", "vehicleNo")
-      .populate("driver", "name")
-      .populate("fleet", "name clientName reservedVehicleCount")
-      .populate("verifiedBy", "name")
-      .sort({ date: -1, createdAt: -1 })
-      .skip(skip)
-      .limit(limit),
-    Payment.countDocuments(where),
-  ]);
-
-  res.json({
-    success: true,
-    data: rows,
-    pagination: paginationMeta(count, page, limit),
-  });
-});
-
-const getPayment = asyncHandler(async (req, res) => {
-  const payment = await Payment.findById(req.params.id)
-    .populate("trip", "tripCode")
-    .populate("vehicle", "vehicleNo")
-    .populate("driver", "name")
-    .populate("fleet", "name clientName")
-    .populate("verifiedBy", "name");
-  if (!payment) {
-    res.status(404);
-    throw new Error("Payment not found");
-  }
-  if (req.user.role === "client" && String(payment.createdBy) !== String(req.user._id)) {
-    res.status(403);
-    throw new Error("Not authorized to view this payment");
-  }
-  res.json({ success: true, data: payment });
-});
-
-const createPayment = asyncHandler(async (req, res) => {
-  const { tripId, vehicleId, driverId, fleetId, ...body } = req.body;
-
-  let payload = { ...body };
-
-  if (req.user.role === "client") {
-    // A client can only ever submit a "fleet reservation payment" against a
-    // fleet they own, and it always starts out pending accountant verification.
-    if (!fleetId) { res.status(400); throw new Error("A fleet is required to submit a payment"); }
-    const fleet = await Fleet.findById(fleetId);
-    if (!fleet || String(fleet.clientUser) !== String(req.user._id)) {
-      res.status(403);
-      throw new Error("You can only submit payments for your own fleets");
-    }
-    if (!body.amount || Number(body.amount) <= 0) { res.status(400); throw new Error("Enter a valid payment amount"); }
-    if (body.paymentType === "cash" && !body.paidToName) { res.status(400); throw new Error("Enter who you paid the cash to"); }
-
-    payload = {
-      ...payload,
-      direction: "received",
-      category: "fleet_reservation",
-      status: "pending",
-      partyName: payload.partyName || fleet.clientName,
-      date: payload.date || new Date(),
-    };
-  } else {
-    if (!body.partyName?.trim()) { res.status(400); throw new Error("party name is required"); }
-    if (!body.amount || Number(body.amount) <= 0) { res.status(400); throw new Error("Enter a valid payment amount"); }
-    if (!body.date) { res.status(400); throw new Error("payment date is required"); }
-    if (!body.category) { res.status(400); throw new Error("payment category is required"); }
+// Driver: "Request -> Payments" for various trip expenses.
+export async function createPaymentRequest(req, res) {
+  const { reason, amount, mode, tripId } = req.body;
+  if (!reason || !amount) {
+    return res.status(400).json({ message: "reason and amount are required" });
   }
 
   const payment = await Payment.create({
-    ...payload,
-    trip: tripId || payload.trip || undefined,
-    vehicle: vehicleId || payload.vehicle || undefined,
-    driver: driverId || payload.driver || undefined,
-    fleet: fleetId || payload.fleet || undefined,
-    createdBy: req.user._id,
-  });
-  res.status(201).json({ success: true, data: payment });
-});
-
-const updatePayment = asyncHandler(async (req, res) => {
-  const { tripId, vehicleId, driverId, ...body } = req.body;
-
-  if (req.user.role === "client") {
-    const existing = await Payment.findById(req.params.id);
-    if (!existing) { res.status(404); throw new Error("Payment not found"); }
-    if (String(existing.createdBy) !== String(req.user._id) || existing.status !== "pending") {
-      res.status(403);
-      throw new Error("You can only edit your own payment while it's still pending verification");
-    }
-    // Clients can correct the amount/mode/evidence while pending, but can never set their own verification status.
-    delete body.status; delete body.verifiedBy; delete body.verifiedAt;
-  }
-
-  const payment = await Payment.findByIdAndUpdate(req.params.id, {
-    ...body,
-    ...(tripId !== undefined ? { trip: tripId || null } : {}),
-    ...(vehicleId !== undefined ? { vehicle: vehicleId || null } : {}),
-    ...(driverId !== undefined ? { driver: driverId || null } : {}),
-  }, {
-    new: true,
-    runValidators: true,
-  });
-  if (!payment) {
-    res.status(404);
-    throw new Error("Payment not found");
-  }
-  res.json({ success: true, data: payment });
-});
-
-const deletePayment = asyncHandler(async (req, res) => {
-  const payment = await Payment.findByIdAndDelete(req.params.id);
-  if (!payment) {
-    res.status(404);
-    throw new Error("Payment not found");
-  }
-  res.json({ success: true, message: "Payment deleted" });
-});
-
-// @route GET /api/payments/summary
-// Cash vs online totals, received vs paid, within optional date range
-const getPaymentSummary = asyncHandler(async (req, res) => {
-  const { from, to } = req.query;
-  const match = {};
-  if (req.user.role === "client") match.createdBy = req.user._id;
-  if (from || to) {
-    match.date = {};
-    if (from) match.date.$gte = new Date(from);
-    if (to) match.date.$lte = endOfDay(to);
-  }
-
-  const rows = await Payment.aggregate([
-    { $match: match },
-    {
-      $group: {
-        _id: { paymentType: "$paymentType", direction: "$direction" },
-        total: { $sum: "$amount" },
-        count: { $sum: 1 },
-      },
-    },
-  ]);
-
-  const summary = {
-    cash: { received: 0, paid: 0 },
-    online: { received: 0, paid: 0 },
-  };
-
-  rows.forEach((r) => {
-    const { paymentType, direction } = r._id;
-    if (paymentType && direction && summary[paymentType]) {
-      summary[paymentType][direction] = r.total || 0;
-    }
+    requestedBy: req.user._id,
+    trip: tripId || null,
+    reason,
+    amount,
+    mode: mode === "online" ? "online" : "cash",
   });
 
-  res.json({ success: true, data: summary });
-});
+  const myVehicleMasterId = await Vehicle.findOne({ currentDriver: req.user._id }).distinct("assignedVehicleMaster");
+  if (myVehicleMasterId[0]) {
+    await notifyUser(myVehicleMasterId[0], {
+      title: "New driver payment request",
+      message: `${req.user.name} requested ₹${amount} for "${reason}".`,
+      type: "payment",
+      link: "/vehicle-master/approvement",
+    });
+  }
 
-const uploadReceipt = asyncHandler(async (req, res) => {
-  const payment = await Payment.findById(req.params.id);
-  if (!payment) {
-    res.status(404);
-    throw new Error("Payment not found");
+  res.status(201).json({ payment });
+}
+
+// Scoped listing: Driver sees their own requests; Vehicle Master sees
+// requests from drivers on their own vehicles; Accountant/Admin/Co-Admin see
+// everything relevant to their stage of the workflow.
+export async function listPayments(req, res) {
+  const filter = {};
+
+  if (req.scope === ROLES.DRIVER) {
+    filter.requestedBy = req.user._id;
+  } else if (req.scope === EMPLOYEE_CATEGORIES.VEHICLE_MASTER) {
+    const myDriverIds = await Vehicle.find({ assignedVehicleMaster: req.user._id }).distinct("currentDriver");
+    filter.requestedBy = { $in: myDriverIds.filter(Boolean) };
   }
-  if (req.user.role === "client" && String(payment.createdBy) !== String(req.user._id)) {
-    res.status(403);
-    throw new Error("You can only attach a screenshot to your own payment");
+  // accountant/admin/co_admin see all — the Accountant Overview's "not other
+  // accountant transaction" exclusion applies to already-paid entries, handled
+  // by the ledger endpoints, not this request queue.
+
+  const payments = await Payment.find(filter).populate(PAYMENT_POPULATE).sort({ createdAt: -1 });
+  res.json({ payments });
+}
+
+// Vehicle Master approves or rejects a driver's expense request.
+export async function vehicleMasterDecide(req, res) {
+  const { id } = req.params;
+  const { decision } = req.body;
+  if (!["approved", "rejected"].includes(decision)) {
+    return res.status(400).json({ message: "decision must be 'approved' or 'rejected'" });
   }
-  if (!req.file) {
-    res.status(400);
-    throw new Error("No file uploaded");
+
+  const payment = await Payment.findById(id);
+  if (!payment) return res.status(404).json({ message: "Payment request not found" });
+  if (payment.status !== "pending_vehicle_master") {
+    return res.status(400).json({ message: "This request has already been decided" });
   }
-  const url = getFileUrl(req, req.file);
-  payment.receiptUrl = url;
+
+  // Confirm the requesting driver is on one of this Vehicle Master's vehicles.
+  const isMyDriver = await Vehicle.exists({
+    assignedVehicleMaster: req.user._id,
+    currentDriver: payment.requestedBy,
+  });
+  if (!isMyDriver) return res.status(403).json({ message: "Not your driver" });
+
+  payment.status = decision === "approved" ? "approved_by_vehicle_master" : "rejected";
+  payment.vehicleMasterApprovedBy = req.user._id;
+  payment.vehicleMasterApprovedAt = new Date();
   await payment.save();
-  res.json({ success: true, data: { receiptUrl: url } });
-});
 
-// Accountant (or admin) reviews the client's evidence - screenshot for
-// online, "paid to" name for cash - and marks the payment verified or rejected.
-const verifyPayment = asyncHandler(async (req, res) => {
-  const payment = await Payment.findById(req.params.id);
-  if (!payment) { res.status(404); throw new Error("Payment not found"); }
-  if (payment.status !== "pending") { res.status(400); throw new Error("Only pending payments can be verified"); }
+  await recordAudit({
+    user: req.user,
+    action: "payment.vehicleMasterDecide",
+    entityType: "Payment",
+    entityId: payment._id,
+    before: { status: "pending_vehicle_master" },
+    after: { status: payment.status },
+  });
 
-  const approve = req.body.approve !== false;
-  payment.status = approve ? "completed" : "failed";
-  payment.verifiedBy = req.user._id;
-  payment.verifiedAt = new Date();
-  if (!approve && req.body.reason) payment.remark = `${payment.remark ? payment.remark + " — " : ""}Rejected: ${req.body.reason}`;
+  if (decision === "approved") {
+    await notifyAccountants({
+      title: "Payment ready to process",
+      message: `A ₹${payment.amount} request for "${payment.reason}" is approved and awaiting payment.`,
+      type: "payment",
+      link: "/accountant/requests",
+    });
+  } else {
+    await notifyUser(payment.requestedBy, {
+      title: "Payment request rejected",
+      message: `Your request for "${payment.reason}" was rejected.`,
+      type: "payment",
+      link: "/driver/payments",
+    });
+  }
+
+  const populated = await Payment.findById(payment._id).populate(PAYMENT_POPULATE);
+  res.json({ payment: populated });
+}
+
+// Accountant executes the payment and records the ledger confirmation.
+export async function accountantPay(req, res) {
+  const { id } = req.params;
+  const { proofUrl } = req.body;
+
+  const payment = await Payment.findById(id).populate("requestedBy", "name");
+  if (!payment) return res.status(404).json({ message: "Payment request not found" });
+  if (payment.status !== "approved_by_vehicle_master") {
+    return res.status(400).json({ message: "Only Vehicle-Master-approved requests can be paid" });
+  }
+
+  payment.status = "paid";
+  payment.paidBy = req.user._id;
+  payment.paidAt = new Date();
+  if (proofUrl) payment.proofUrl = proofUrl;
   await payment.save();
-  res.json({ success: true, data: payment });
-});
 
-module.exports = {
-  getPayments,
-  getPayment,
-  createPayment,
-  updatePayment,
-  deletePayment,
-  getPaymentSummary,
-  uploadReceipt,
-  verifyPayment,
-};
+  await LedgerEntry.create({
+    mode: payment.mode,
+    direction: "sent",
+    amount: payment.amount,
+    party: payment.requestedBy?.name || "Driver",
+    description: payment.reason,
+    relatedPayment: payment._id,
+    relatedTrip: payment.trip || null,
+    recordedBy: req.user._id,
+    proofUrl: proofUrl || null,
+  });
+
+  await recordAudit({
+    user: req.user,
+    action: "payment.accountantPay",
+    entityType: "Payment",
+    entityId: payment._id,
+    before: { status: "approved_by_vehicle_master" },
+    after: { status: payment.status, amount: payment.amount },
+  });
+
+  await notifyUser(payment.requestedBy, {
+    title: "Payment received",
+    message: `Your ₹${payment.amount} request for "${payment.reason}" has been paid.`,
+    type: "payment",
+    link: "/driver/payments",
+  });
+
+  const populated = await Payment.findById(payment._id).populate(PAYMENT_POPULATE);
+  res.json({ payment: populated });
+}

@@ -1,45 +1,31 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
+
 const { Schema } = mongoose;
 
 const vehicleSchema = new Schema(
   {
-    vehicleNo: { type: String, unique: true, sparse: true },
-    vehicleType: { type: String }, // truck, trailer, tempo, etc
-    modelName: { type: String },
-    manufactureYear: { type: Number },
-    ownerType: { type: String, enum: ["owned", "market", "attached"] },
-    capacityTon: { type: Number },
-    chassisNumber: { type: String },
-    engineNumber: { type: String },
-
-    rcNumber: { type: String },
-    rcExpiry: { type: Date },
-    insuranceNumber: { type: String },
-    insuranceExpiry: { type: Date },
-    permitNumber: { type: String },
-    permitExpiry: { type: Date },
-    fitnessExpiry: { type: Date },
-    pucExpiry: { type: Date },
-
-    currentOdometer: { type: Number },
-    tankCapacity: { type: Number },
-
-    photoUrl: { type: String },
-    rcDocUrl: { type: String },
-    insuranceDocUrl: { type: String },
-
+    registrationNumber: { type: String, required: true, unique: true, trim: true, uppercase: true },
+    type: { type: String, trim: true }, // "Vehicle Type"
+    capacity: { type: String, trim: true }, // "Maximum Load Capacity"
     status: {
       type: String,
-      enum: ["active", "inactive", "in_maintenance", "sold"],
-      default: "active",
+      enum: ["available", "on_trip", "maintenance", "inactive"],
+      default: "available",
     },
-    remark: { type: String },
-    assignedEmployee: { type: Schema.Types.ObjectId, ref: "User" },
-    createdBy: { type: Schema.Types.ObjectId, ref: "User" },
+    assignedVehicleMaster: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    currentDriver: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    baseLocation: { type: String, trim: true },
+
+    rcNumber: { type: String, trim: true },
+    rcPhotoKey: { type: String, default: null }, // S3 key via /api/uploads/proof
+    // If third_party, ownerName is not collected (per doc: "If Third Party, don't ask details").
+    ownershipType: { type: String, enum: ["company", "third_party"], default: "company" },
+    ownerName: { type: String, trim: true },
+    odometerReading: { type: Number, default: 0 },
+    tyreCount: { type: Number, default: null },
+    vehicleDimension: { type: String, trim: true }, // e.g. "20ft x 8ft x 8ft"
   },
   { timestamps: true }
 );
 
-vehicleSchema.index({ vehicleNo: "text", modelName: "text", chassisNumber: "text" });
-
-module.exports = mongoose.model("Vehicle", vehicleSchema);
+export default mongoose.model("Vehicle", vehicleSchema);

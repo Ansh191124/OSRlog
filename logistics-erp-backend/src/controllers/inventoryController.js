@@ -1,24 +1,72 @@
-const asyncHandler = require("express-async-handler");
-const { InventoryItem, ApprovalRequest } = require("../models");
+import InventoryItem from "../models/InventoryItem.js";
 
-const getInventory = asyncHandler(async (req, res) => {
-  const items = await InventoryItem.find().sort({ createdAt: -1 });
-  res.json({ success: true, data: items });
-});
+export async function listInventory(req, res) {
+  const items = await InventoryItem.find().populate("usageLog.recordedBy", "name").sort({ createdAt: -1 });
+  res.json({ items });
+}
 
-// Stock follows the required workflow: request -> admin approval -> accountant payment -> available stock.
-const addInventory = asyncHandler(async (req, res) => {
-  const { name, category = "custom", unit = "pcs", quantity, unitCost, supplier, notes, paymentType = "cash", paymentMode = "cash", date } = req.body;
-  if (!name || Number(quantity) <= 0 || Number(unitCost) < 0) {
-    res.status(400); throw new Error("name, a positive quantity, and unit cost are required");
-  }
-  const item = await InventoryItem.create({ name, category, unit, quantity: Number(quantity), unitCost: Number(unitCost), supplier, notes, status: "pending_approval", createdBy: req.user._id });
-  const request = await ApprovalRequest.create({
-    requestType: "inventory_purchase", title: `Inventory purchase: ${item.name} (${quantity} ${unit})`,
-    amount: Number(quantity) * Number(unitCost), paymentType, paymentMode, inventoryItem: item._id,
-    details: supplier ? `Supplier: ${supplier}${date ? `; requested date: ${date}` : ""}` : undefined, requestedBy: req.user._id,
+// Manual admin/co-admin override — a direct stock correction, separate from
+// the paid-procurement flow (see inventoryPurchaseController). Keeps the
+// totalReceived/totalUsed invariant intact by folding any quantity change
+// into totalReceived.
+export async function createInventoryItem(req, res) {
+  const { name, quantity, unit, notes } = req.body;
+  if (!name) return res.status(400).json({ message: "name is required" });
+
+  const qty = quantity || 0;
+  const item = await InventoryItem.create({
+    name,
+    quantity: qty,
+    totalReceived: qty,
+    unit,
+    notes,
+    updatedBy: req.user._id,
   });
-  res.status(201).json({ success: true, data: item, request });
-});
+  res.status(201).json({ item });
+}
 
-module.exports = { getInventory, addInventory };
+export async function updateInventoryItem(req, res) {
+  const { id } = req.params;
+  const item = await InventoryItem.findById(id);
+  if (!item) return res.status(404).json({ message: "Inventory item not found" });
+
+  const { name, quantity, unit, notes } = req.body;
+  if (name !== undefined) item.name = name;
+  if (unit !== undefined) item.unit = unit;
+  if (notes !== undefined) item.notes = notes;
+  if (quantity !== undefined) {
+    const delta = quantity - item.quantity;
+    item.totalReceived += delta;
+    item.quantity = quantity;
+  }
+  item.updatedBy = req.user._id;
+
+  await item.save();
+  res.json({ item });
+}
+
+// Entry Master/Co-Admin/Admin: record that some of an item's current stock
+// has been used — "how much left and how much used" is then just
+// totalReceived/totalUsed/quantity on the item, kept in sync here.
+export async function recordUsage(req, res) {
+  const { id } = req.params;
+  const { quantityUsed, note } = req.body;
+  if (!quantityUsed || quantityUsed <= 0) {
+    return res.status(400).json({ message: "quantityUsed must be a positive number" });
+  }
+
+  const item = await InventoryItem.findById(id);
+  if (!item) return res.status(404).json({ message: "Inventory item not found" });
+  if (quantityUsed > item.quantity) {
+    return res.status(400).json({ message: `Only ${item.quantity} ${item.unit || ""} left in stock`.trim() });
+  }
+
+  item.totalUsed += quantityUsed;
+  item.quantity -= quantityUsed;
+  item.usageLog.push({ quantityUsed, note, recordedBy: req.user._id });
+  item.updatedBy = req.user._id;
+  await item.save();
+
+  const populated = await InventoryItem.findById(item._id).populate("usageLog.recordedBy", "name");
+  res.json({ item: populated });
+}

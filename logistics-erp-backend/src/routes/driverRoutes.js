@@ -1,40 +1,26 @@
-const express = require("express");
-const router = express.Router();
-const {
-  getDrivers,
-  getDriver,
-  getExpiringLicenses,
-  getDriverPerformance,
-  createDriver,
-  updateDriver,
-  deleteDriver,
-  uploadDriverPhoto,
-  uploadDriverLicenseDoc,
-} = require("../controllers/driverController");
-const { protect, authorize, requirePermission } = require("../middlewares/auth");
-const { upload, setUploadFolder } = require("../middlewares/upload");
+import { Router } from "express";
+import { createPeopleController } from "../controllers/peopleController.js";
+import { listDriverSummaries } from "../controllers/driverSummaryController.js";
+import { requireAuth, requireScope } from "../middleware/auth.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { ROLES, EMPLOYEE_CATEGORIES } from "../config/roles.js";
 
-router.use(protect, requirePermission("drivers"));
-
-router.get("/", getDrivers);
-router.get("/expiring-licenses", getExpiringLicenses);
-router.get("/:id/performance", getDriverPerformance);
-router.get("/:id", getDriver);
-router.post("/", authorize("admin"), createDriver);
-router.put("/:id", authorize("admin"), updateDriver);
-router.delete("/:id", authorize("admin"), deleteDriver);
-
-router.post(
-  "/:id/photo",
-  setUploadFolder("drivers"),
-  upload.single("file"),
-  uploadDriverPhoto
+const router = Router();
+const canManage = requireScope(ROLES.ADMIN, ROLES.CO_ADMIN, EMPLOYEE_CATEGORIES.ENTRY_MASTER);
+// Vehicle Master can view full driver detail (read-only) but not create/edit them.
+const canView = requireScope(
+  ROLES.ADMIN,
+  ROLES.CO_ADMIN,
+  EMPLOYEE_CATEGORIES.ENTRY_MASTER,
+  EMPLOYEE_CATEGORIES.VEHICLE_MASTER
 );
-router.post(
-  "/:id/license-doc",
-  setUploadFolder("drivers"),
-  upload.single("file"),
-  uploadDriverLicenseDoc
-);
+const adminOrCoAdmin = requireScope(ROLES.ADMIN, ROLES.CO_ADMIN);
+const { list, create, update } = createPeopleController(ROLES.DRIVER);
 
-module.exports = router;
+router.use(requireAuth);
+router.get("/summary", adminOrCoAdmin, asyncHandler(listDriverSummaries));
+router.get("/", canView, asyncHandler(list));
+router.post("/", canManage, asyncHandler(create));
+router.patch("/:id", canManage, asyncHandler(update));
+
+export default router;
